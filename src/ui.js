@@ -13,7 +13,7 @@ export function layout(title, body, script = '') {
 const LOGO = '<a class="logo" href="/"><span class="mk">&gt;_</span><span>flisk</span><small>Growth</small></a>';
 
 function shell(login, active, inner) {
-  const nav = [['Sites', '/']].map(([n, h]) => `<a href="${h}" class="${n === active ? 'on' : ''}">${n}</a>`).join('');
+  const nav = [['Sites', '/'], ['API keys', '/tokens']].map(([n, h]) => `<a href="${h}" class="${n === active ? 'on' : ''}">${n}</a>`).join('');
   return `<div class="frame"><header class="top">${LOGO}<nav>${nav}</nav><form class="me" method="post" action="/logout" style="margin:0"><span class="m">${esc(login)}</span><button class="av" title="Sign out" style="border:0;cursor:pointer">${esc(login[0].toUpperCase())}</button></form></header>${inner}</div>`;
 }
 
@@ -115,4 +115,13 @@ export function installPage(login, site) {
   const wait = '<aside class="wait" id="wait"><span class="pulse"></span><div><b>Listening for the first pageview</b><small>Open ' + esc(site) + ' in another tab. It shows up here within a minute.</small></div><a class="btn" href="/site/' + esc(site) + '">Skip to dashboard</a></aside>';
   const inner = `<div class="ph"><div><div class="m" style="color:var(--dim);margin-bottom:10px">Growth / Analytics / ${esc(site)}</div><h1>Install the script</h1><p class="sub">Two minutes. No cookies, no consent banner.</p></div></div><div class="inst">${steps}<div class="cwrap">${body}${wait}</div></div>`;
   return layout(`Install ${site} · Flisk Analytics`, shell(login, 'Sites', inner), `window.__SITE=${JSON.stringify(site)};${INSTALL_JS}`);
+}
+
+export function tokensPage(login, tokens, fresh = null) {
+  const origin = 'https://analytics.flisk.si';
+  const when = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const made = fresh ? `<div class="card" style="margin-bottom:24px"><div class="cbody"><h3>Your new key</h3><p>Copy it now. It is not shown again.</p>${code(fresh.token)}<h3>Add it to Claude Code</h3>${code(`claude mcp add --transport http flisk-analytics ${origin}/mcp --header "Authorization: Bearer ${fresh.token}"`)}</div></div>` : '';
+  const rows = tokens.length ? tokens.map((t) => `<form method="post" action="/tokens" style="display:flex;gap:16px;align-items:center;padding:12px 0;border-top:1px solid var(--rule,#d8d4bd)"><b style="flex:1">${esc(t.label)}</b><span class="m" style="color:var(--dim)">${when(t.created)}</span><button class="btn" name="revoke" value="${esc(t.id)}">Revoke</button></form>`).join('') : '<div class="empty" style="padding:18px 0">No keys yet</div>';
+  const inner = `<div class="ph"><div><div class="m" style="color:var(--dim);margin-bottom:10px">Growth / Analytics / API keys</div><h1>API keys</h1><p class="sub">For agents. A key can add sites, get the install steps and read your numbers. Nothing else.</p></div></div>${made}<div class="card"><div class="cbody"><form method="post" action="/tokens" style="display:flex;gap:12px;margin-bottom:12px"><input name="label" maxlength="40" placeholder="Name, like claude-code" style="flex:1;padding:10px 12px;border:1px solid var(--rule,#d8d4bd);background:transparent;font:inherit"><button class="btn p">Make a key</button></form>${rows}</div></div><p class="sub" style="margin-top:24px">Server: <code>${origin}/mcp</code> (MCP over HTTP). The same key works as <code>Authorization: Bearer</code> on <code>/api/sites</code> and <code>/api/stats</code>.</p>`;
+  return layout('API keys · Flisk Analytics', shell(login, 'API keys', inner), "document.addEventListener('click',function(e){var c=e.target.closest('[data-copy]');if(!c)return;navigator.clipboard.writeText(c.parentNode.querySelector('pre').textContent);c.textContent='Copied';setTimeout(function(){c.textContent='Copy'},1200)});");
 }

@@ -23,3 +23,13 @@ Workers Free is 100,000 requests a day for the whole account, shared with chat, 
 2. Create a GitHub OAuth app with callback `https://analytics.flisk.si/auth/callback`, then set the secrets listed in `wrangler.toml`.
 3. `bunx wrangler@4 deploy`.
 4. Add `a.js` and `install/jekyll` to the website repo, add the include to its layout, check the dashboard for one real pageview, then remove Plausible and add the Growth link.
+
+## For agents (MCP and skill)
+
+Make a key at `/tokens`, then:
+
+```bash
+claude mcp add --transport http flisk-analytics https://analytics.flisk.si/mcp --header "Authorization: Bearer fa_<key>"
+```
+
+Tools: `list_sites`, `add_site`, `install_snippet`, `site_stats`. The same key works as `Authorization: Bearer` on `/api/sites` and `/api/stats`. Only a SHA-256 of a key is stored. A ready skill is in `skills/flisk-analytics/`.

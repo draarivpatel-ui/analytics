@@ -2,7 +2,12 @@ import { allowed, githubAuthorizeUrl, githubLogin } from './auth.js';
 import { clearSession, makeSession, readSession, sameOrigin } from './session.js';
 import { CORS, handleBeacon } from './ingest.js';
 import { DEFAULT_PANELS, siteStats, sitesOverview, validDomain } from './stats.js';
-import { dashboardPage, installPage, loginPage, messagePage, newSitePage, sitesPage } from './ui.js';
+import { dashboardPage, installPage, loginPage, messagePage, newSitePage, sitesPage, tokensPage } from './ui.js';
+import { addSite, cleanDomain, listDomains, ownerOf } from './sites.js';
+import { bearerLogin, createToken, listTokens, revokeToken } from './tokens.js';
+import { mcpResponse } from './mcp.js';
+
+export { cleanDomain };
 
 const SECURITY = {
   'x-content-type-options': 'nosniff',
@@ -17,16 +22,6 @@ const redirect = (location, cookie) => { const h = new Headers({ location }); if
 
 const STATE = 'fa_state';
 const cookieOf = (request, name) => new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(request.headers.get('cookie') || '')?.[1] || '';
-
-export function cleanDomain(input) {
-  let d = String(input || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0];
-  return validDomain(d) ? d : '';
-}
-
-async function ownerOf(env, domain) {
-  const row = await env.DB.prepare('SELECT owner FROM sites WHERE domain = ?').bind(domain).first();
-  return row?.owner || '';
-}
 
 export async function handle(request, env) {
   const url = new URL(request.url);
@@ -58,21 +53,34 @@ export async function handle(request, env) {
     return redirect('/', clearSession());
   }
 
-  const session = await readSession(env, request);
+  // Agents send `Authorization: Bearer fa_...` to /mcp and /api/*; people use the GitHub session cookie.
   const isApi = path.startsWith('/api/');
-  if (!session || !allowed(env, session.login)) return isApi ? json(401, { error: 'sign in' }) : html(loginPage());
-  const login = session.login;
+  if (path === '/mcp') {
+    const who = await bearerLogin(env, request);
+    return who ? mcpResponse(request, env, who) : json(401, { error: 'send Authorization: Bearer <key>. Make a key at /tokens.' });
+  }
+  const session = await readSession(env, request);
+  const bearer = isApi && !session ? await bearerLogin(env, request) : '';
+  if (!bearer && (!session || !allowed(env, session.login))) return isApi ? json(401, { error: 'sign in' }) : html(loginPage());
+  const login = bearer || session.login;
 
   if (path === '/' && method === 'GET') return html(sitesPage(login));
   if (path === '/new' && method === 'GET') return html(newSitePage(login));
   if (path === '/sites' && method === 'POST') {
     if (!sameOrigin(request, env.PUBLIC_ORIGIN)) return html(messagePage('Not allowed', 'Add sites from the cabinet.', login), 403);
-    const domain = cleanDomain((await request.formData().catch(() => null))?.get('domain'));
-    if (!domain) return html(newSitePage(login, 'That is not a domain. Use something like flisk.sh.'), 400);
-    const owner = await ownerOf(env, domain);
-    if (owner && owner !== login) return html(newSitePage(login, 'That site belongs to someone else.'), 409);
-    if (!owner) await env.DB.prepare('INSERT INTO sites (domain, owner, created) VALUES (?, ?, ?)').bind(domain, login, Date.now()).run();
+    const r = await addSite(env, login, (await request.formData().catch(() => null))?.get('domain'));
+    if (r.error) return html(newSitePage(login, r.error), r.status);
+    const domain = r.domain;
     return redirect(`/site/${domain}/install`);
+  }
+
+  if (path === '/tokens' && method === 'GET') return html(tokensPage(login, await listTokens(env, login)));
+  if (path === '/tokens' && method === 'POST') {
+    if (!sameOrigin(request, env.PUBLIC_ORIGIN)) return html(messagePage('Not allowed', 'Make keys from the cabinet.', login), 403);
+    const form = await request.formData().catch(() => null);
+    if (form?.get('revoke')) { await revokeToken(env, login, String(form.get('revoke'))); return redirect('/tokens'); }
+    const made = await createToken(env, login, form?.get('label'));
+    return html(tokensPage(login, await listTokens(env, login), made));
   }
 
   const m = /^\/site\/([^/]+)(\/install)?$/.exec(path);
@@ -83,8 +91,7 @@ export async function handle(request, env) {
   }
 
   if (path === '/api/sites' && method === 'GET') {
-    const { results } = await env.DB.prepare('SELECT domain FROM sites WHERE owner = ? ORDER BY created').bind(login).all();
-    const domains = (results || []).map((r) => r.domain);
+    const domains = await listDomains(env, login);
     try {
       return json(200, { sites: await sitesOverview(env, domains) });
     } catch {
