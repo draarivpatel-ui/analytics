@@ -15,7 +15,7 @@ dataset = "flisk_analytics"
 [[d1_databases]]
 binding = "DB"
 database_name = "analytics"
-database_id = "REPLACE_AFTER_d1_create"
+database_id = "7d802197-fe6b-46c4-af8f-4df2aca82a16"
 
 [vars]
 PUBLIC_ORIGIN = "https://analytics.flisk.si"
