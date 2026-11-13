@@ -1,0 +1,33 @@
+name = "analytics"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# analytics.flisk.si on the flisk.si zone.
+routes = [{ pattern = "analytics.flisk.si", custom_domain = true }]
+
+# One data point per pageview. Free plan: 100,000 data points written and 10,000 SQL reads a day.
+[[analytics_engine_datasets]]
+binding = "EVENTS"
+dataset = "flisk_analytics"
+
+# The list of sites only (a few rows). Free plan: 100,000 rows written, 5 million read a day.
+# Tables: `bunx wrangler@4 d1 execute analytics --remote --file schema.sql`
+[[d1_databases]]
+binding = "DB"
+database_name = "analytics"
+database_id = "REPLACE_AFTER_d1_create"
+
+[vars]
+PUBLIC_ORIGIN = "https://analytics.flisk.si"
+ALLOWED_LOGINS = "odykyi"
+# The Workers Free plan allows 100,000 requests a day for the whole account, shared with chat, fleet and inference.
+# Past this many counted pageviews a day (per data centre, approximate) the beacon returns 204 and writes nothing.
+DAILY_CAP = "30000"
+
+# Secrets (GitHub OAuth app with callback https://analytics.flisk.si/auth/callback):
+#   bunx wrangler@4 secret put GITHUB_CLIENT_ID
+#   bunx wrangler@4 secret put GITHUB_CLIENT_SECRET
+#   bunx wrangler@4 secret put SESSION_SECRET   any long random string; signs the cabinet cookie
+#   bunx wrangler@4 secret put HASH_SECRET      any long random string; salts the daily visitor hash
+#   bunx wrangler@4 secret put CF_ACCOUNT_ID
+#   bunx wrangler@4 secret put CF_API_TOKEN     a token with Account > Account Analytics > Read only

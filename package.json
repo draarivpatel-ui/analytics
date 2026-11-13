@@ -1,0 +1,9 @@
+{
+  "name": "analytics",
+  "private": true,
+  "type": "module",
+  "description": "Cookieless web analytics for the Flisk sites. One Cloudflare Worker, Analytics Engine for events, GitHub login.",
+  "scripts": {
+    "test": "bun test"
+  }
+}
