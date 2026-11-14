@@ -107,3 +107,24 @@ test('the sign-in page loads our own tracker, and the CSP allows its script', as
   expect(res.headers.get('content-security-policy')).toMatch(/script-src [^;]*https:\/\/flisk\.sh/);
   expect(res.headers.get('content-security-policy')).toMatch(/connect-src [^;]*https:\/\/flisk\.sh/);
 });
+
+test('signed out: real pages show the login, any other address is a 404, /health is public', async () => {
+  const env = fakeEnv();
+  const get = (p) => handle(new Request(`https://analytics.flisk.si${p}`), env);
+  for (const p of ['/', '/new', '/tokens', '/site/flisk.sh', '/site/flisk.sh/install']) expect((await get(p)).status).toBe(200);
+  for (const p of ['/nonexistent-xyz', '/snippet.js', '/s.js', '/a.js']) expect((await get(p)).status).toBe(404);
+  const health = await get('/health');
+  expect(health.status).toBe(200);
+  expect(await health.json()).toEqual({ ok: true });
+});
+
+test('dashboard chart uses whole-number axis ticks, and the sites page explains an empty search', async () => {
+  const env = fakeEnv();
+  const dash = await (await as(env, 'odykyi', '/')).text();
+  expect(dash).toContain('No sites match');
+  const chartSrc = (await import('../src/ui.js')).dashboardPage('odykyi', 'flisk.sh');
+  expect(chartSrc).toContain('st*(4-k)');
+  expect(chartSrc).not.toContain('Math.round(mx*(1-k/4))');
+  const keys = await (await as(env, 'odykyi', '/tokens')).text();
+  expect(keys).toContain('margin:24px;">Server:');
+});

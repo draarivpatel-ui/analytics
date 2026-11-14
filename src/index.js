@@ -21,6 +21,7 @@ const html = (body, status = 200) => new Response(body, { status, headers: { 'co
 const redirect = (location, cookie) => { const h = new Headers({ location }); if (cookie) for (const c of [].concat(cookie)) h.append('set-cookie', c); return new Response(null, { status: 303, headers: h }); };
 
 const STATE = 'fa_state';
+const PAGES = /^\/(new|tokens|sites|site\/[^/]+(\/install)?)?$/;
 const cookieOf = (request, name) => new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(request.headers.get('cookie') || '')?.[1] || '';
 
 export async function handle(request, env) {
@@ -33,6 +34,7 @@ export async function handle(request, env) {
     if (method === 'POST' || method === 'OPTIONS') return handleBeacon(request, env);
     return new Response(null, { status: 405, headers: CORS });
   }
+  if (path === '/health') return json(200, { ok: true });
   if (path === '/robots.txt') return new Response('User-agent: *\nDisallow: /\n', { headers: { 'content-type': 'text/plain' } });
 
   if (path === '/auth/login') {
@@ -61,7 +63,11 @@ export async function handle(request, env) {
   }
   const session = await readSession(env, request);
   const bearer = isApi && !session ? await bearerLogin(env, request) : '';
-  if (!bearer && (!session || !allowed(env, session.login))) return isApi ? json(401, { error: 'sign in' }) : html(loginPage());
+  if (!bearer && (!session || !allowed(env, session.login))) {
+    if (isApi) return json(401, { error: 'sign in' });
+    // Only real pages show the sign-in; any other address is a plain 404.
+    return PAGES.test(path) ? html(loginPage()) : html(messagePage('Not found', 'There is nothing at this address.'), 404);
+  }
   const login = bearer || session.login;
 
   if (path === '/' && method === 'GET') return html(sitesPage(login));
