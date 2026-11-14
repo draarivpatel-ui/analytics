@@ -1,7 +1,7 @@
 // The pageview beacon: one request in, one Analytics Engine data point out. Nothing else is stored.
 // No cookie, no IP kept. A visitor is a hash of (secret, day, site, ip, user agent) that changes every day.
 
-export const BLOBS = ['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city'];
+export const BLOBS = ['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city', 'theme'];
 
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|curl|wget|python|node-fetch|axios|go-http|java\/|monitor|uptime|pingdom|phantom|puppeteer|playwright/i;
 export const isBot = (ua) => !ua || BOT.test(ua);
@@ -38,6 +38,8 @@ const names = typeof Intl !== 'undefined' && Intl.DisplayNames ? new Intl.Displa
 const countryName = (code) => { try { return (code && names?.of(code)) || ''; } catch { return ''; } };
 
 const clip = (v, n = 120) => String(v ?? '').slice(0, n);
+// A theme id such as ivory or cool-glow: lowercase letters, digits and dashes, 32 characters at most. Anything else is dropped.
+export const cleanTheme = (t) => { const s = String(t ?? '').trim().toLowerCase(); return /^[a-z0-9-]{1,32}$/.test(s) ? s : ''; };
 const cleanPath = (p) => { const s = clip(p, 200); return s.startsWith('/') ? s.split('?')[0].split('#')[0] || '/' : '/'; };
 
 // Registered domains, read from D1 at most once a minute per isolate. A beacon for any other domain is dropped.
@@ -84,7 +86,7 @@ export async function handleBeacon(request, env, now = Date.now()) {
   const { browser, os, device } = parseUa(ua);
   const cf = request.cf || {};
   const ip = request.headers.get('cf-connecting-ip') || '';
-  const blobs = [cleanPath(b.p), clip(source), channel, countryName(cf.country), browser, os, device, await visitorHash(env, site, ip, ua, new Date(now)), clip(b.s, 24), clip(b.u, 60), clip(cf.region, 60), clip(cf.city, 60)];
+  const blobs = [cleanPath(b.p), clip(source), channel, countryName(cf.country), browser, os, device, await visitorHash(env, site, ip, ua, new Date(now)), clip(b.s, 24), clip(b.u, 60), clip(cf.region, 60), clip(cf.city, 60), cleanTheme(b.t)];
   env.EVENTS.writeDataPoint({ indexes: [site], blobs, doubles: [1] });
   return done();
 }

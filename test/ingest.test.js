@@ -6,7 +6,7 @@ beforeEach(() => resetSitesCache());
 
 test('a real pageview writes exactly one data point with the documented blobs', async () => {
   const env = fakeEnv();
-  const res = await handleBeacon(beacon({ d: 'flisk.sh', p: '/docs/quickstart/?x=1#top', r: 'https://github.com/flisk-sh/flisk', s: 'abc', u: 'launch' }), env);
+  const res = await handleBeacon(beacon({ d: 'flisk.sh', p: '/docs/quickstart/?x=1#top', r: 'https://github.com/flisk-sh/flisk', s: 'abc', u: 'launch', t: 'ivory' }), env);
   expect(res.status).toBe(204);
   expect(env.points).toHaveLength(1);
   const p = env.points[0];
@@ -20,6 +20,7 @@ test('a real pageview writes exactly one data point with the documented blobs', 
   expect(p.blobs[7]).toMatch(/^[0-9a-f]{16}$/);
   expect(p.blobs[8]).toBe('abc');
   expect(p.blobs[9]).toBe('launch');
+  expect(p.blobs[12]).toBe('ivory');
   expect(JSON.stringify(p)).not.toContain('203.0.113.9'); // the IP is never stored
 });
 
@@ -75,4 +76,37 @@ test('user agents', () => {
   expect(parseUa('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36 Edg/130')).toEqual({ browser: 'Edge', os: 'Windows', device: 'Desktop' });
   expect(isBot('Googlebot/2.1')).toBe(true);
   expect(isBot(UA)).toBe(false);
+});
+
+test('the theme is validated: junk, upper case and long ids are cleaned, and an old tracker without t stores an empty theme', async () => {
+  const { cleanTheme } = await import('../src/ingest.js');
+  expect(cleanTheme(' Cool-Glow ')).toBe('cool-glow');
+  expect(cleanTheme('a'.repeat(33))).toBe('');
+  expect(cleanTheme('<script>')).toBe('');
+  expect(cleanTheme({})).toBe('');
+  expect(cleanTheme(undefined)).toBe('');
+  const env = fakeEnv();
+  await handleBeacon(beacon({ d: 'flisk.sh', p: '/' }), env);
+  await handleBeacon(beacon({ d: 'flisk.sh', p: '/', t: 'x y' }), env);
+  expect(env.points.map((p) => p.blobs[12])).toEqual(['', '']);
+});
+
+test('a.js sends the theme: data-flisk-theme, else data-theme, never light or dark, cleaned', async () => {
+  const src = await Bun.file(new URL('../public/a.js', import.meta.url)).text();
+  const run = (attrs) => {
+    let sent;
+    const html = { getAttribute: (k) => attrs[k] ?? null };
+    const script = { getAttribute: (k) => (k === 'data-domain' ? 'x.flisk.si' : null) };
+    const g = { document: { currentScript: script, documentElement: html, referrer: '', visibilityState: 'visible' }, navigator: { userAgent: 'Chrome', sendBeacon: (_u, b) => { sent = JSON.parse(b); return true; } }, location: { pathname: '/', search: '' }, history: {}, sessionStorage: { getItem: () => 'sid', setItem() {} }, addEventListener() {}, URLSearchParams, setTimeout, JSON, String, Math, RegExp };
+    new Function(...Object.keys(g), src)(...Object.values(g));
+    return sent.t;
+  };
+  expect(run({ 'data-flisk-theme': 'ivory' })).toBe('ivory');
+  expect(run({ 'data-flisk-theme': 'ivory', 'data-theme': 'dark' })).toBe('ivory');
+  expect(run({ 'data-theme': 'glow' })).toBe('glow');
+  expect(run({ 'data-theme': 'dark' })).toBe('');
+  expect(run({ 'data-theme': ' Light ' })).toBe('');
+  expect(run({})).toBe('');
+  expect(run({ 'data-flisk-theme': ' Cool Glow! ' })).toBe('coolglow');
+  expect(run({ 'data-flisk-theme': 'a'.repeat(40) })).toHaveLength(32);
 });
