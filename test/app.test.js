@@ -105,4 +105,5 @@ test('the sign-in page loads our own tracker, and the CSP allows its script', as
   const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
   expect(head).toContain('<script defer data-domain="analytics.flisk.si" src="https://flisk.sh/a.js"></script>');
   expect(res.headers.get('content-security-policy')).toMatch(/script-src [^;]*https:\/\/flisk\.sh/);
+  expect(res.headers.get('content-security-policy')).toMatch(/connect-src [^;]*https:\/\/flisk\.sh/);
 });
