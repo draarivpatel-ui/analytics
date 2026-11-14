@@ -54,8 +54,8 @@ export function newSitePage(login, error = '') {
 
 const DASH_JS = `
 var SITE=window.__SITE,range=new URLSearchParams(location.search).get('r')||'30d',data={},tabState={};
-var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns']],head:'Source'},{tabs:[['Top pages','pages']],head:'Page'},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities']],head:'Country'},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']],head:'Browser'}];
-var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',pages:'Page',countries:'Country',regions:'Region',cities:'City',browsers:'Browser',os:'Operating system',devices:'Device'};
+var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns'],['Themes','themes']],head:'Source'},{tabs:[['Top pages','pages']],head:'Page'},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities']],head:'Country'},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']],head:'Browser'}];
+var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',themes:'Theme',pages:'Page',countries:'Country',regions:'Region',cities:'City',browsers:'Browser',os:'Operating system',devices:'Device'};
 function fmt(n){return n==null?'—':n.toLocaleString('en-US')}
 function dur(s){if(s==null)return '—';var m=Math.floor(s/60);return m?m+'m '+(s%60)+'s':s+'s'}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}

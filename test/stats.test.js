@@ -64,3 +64,12 @@ test('the sites page asks for every site in one query', async () => {
   expect(out.find((s) => s.domain === 'chat.flisk.si')).toMatchObject({ total: 0, change: null });
   expect(out[0].days).toHaveLength(30);
 });
+
+test('the themes panel reads blob13, skips empty themes and is accepted like campaigns', async () => {
+  const seen = [];
+  const sql = async (q) => { seen.push(q); return q.includes('GROUP BY k') ? [{ k: 'ivory', v: '4' }] : q.includes('GROUP BY t') ? [] : q.includes('FROM (SELECT') ? [] : [{ pv: '1', uv: '1', visits: '1', v: '1' }]; };
+  const out = await siteStats({}, 'chat.flisk.si', '7d', ['themes', 'campaigns'], { sql, cache: fakeCache() });
+  expect(out.panels.themes).toEqual([{ k: 'ivory', v: 4 }]);
+  const q = seen.find((x) => x.includes('blob13 AS k'));
+  expect(q).toContain("blob13 != ''");
+});

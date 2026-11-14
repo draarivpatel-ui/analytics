@@ -4,7 +4,7 @@
 const DATASET = 'flisk_analytics';
 export const RANGES = { today: { n: 1, step: 'HOUR', ttl: 60 }, '7d': { n: 7, step: 'DAY', ttl: 300 }, '30d': { n: 30, step: 'DAY', ttl: 600 }, '12m': { n: 365, step: 'WEEK', ttl: 3600 } };
 export const PANELS = {
-  channels: 'blob3', sources: 'blob2', campaigns: 'blob10', pages: 'blob1',
+  channels: 'blob3', sources: 'blob2', campaigns: 'blob10', themes: 'blob13', pages: 'blob1',
   countries: 'blob4', regions: 'blob11', cities: 'blob12',
   browsers: 'blob5', os: 'blob6', devices: 'blob7',
 };

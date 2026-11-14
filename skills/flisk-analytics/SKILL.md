@@ -22,7 +22,7 @@ Never print or store the key anywhere else. If the tools below are missing, ask 
 - `list_sites`: the user's sites with 30-day visitors.
 - `add_site {domain}`: register a bare domain such as `flisk.sh` (a URL is cleaned to the domain). Safe to repeat.
 - `install_snippet {site}`: the script tag plus the Jekyll, Next.js and Worker variants.
-- `site_stats {site, range, panels}`: `range` is `today`, `7d`, `30d` or `12m`; `panels` picks the top lists.
+- `site_stats {site, range, panels}`: `range` is `today`, `7d`, `30d` or `12m`; `panels` picks the top lists (`channels`, `sources`, `campaigns`, `themes`, `pages`, `countries`, `regions`, `cities`, `browsers`, `os`, `devices`).
 
 ## Install a site
 
