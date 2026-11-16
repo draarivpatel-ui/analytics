@@ -162,3 +162,14 @@ test('the tracking beacon still takes POST', async () => {
   expect(res.status).not.toBe(405);
 });
 
+test('GET / has exactly one main landmark, signed out and signed in', async () => {
+  const env = fakeEnv();
+  const pages = [await (await handle(new Request('https://analytics.flisk.si/'), env)).text(), await (await as(env, 'odykyi', '/')).text()];
+  for (const html of pages) {
+    expect(html.match(/<main[\s>]/g)?.length).toBe(1);
+    expect(html.match(/<\/main>/g)?.length).toBe(1);
+  }
+  const signedIn = pages[1];
+  expect(signedIn.indexOf('<header class="top">')).toBeLessThan(signedIn.indexOf('<main'));
+});
+
