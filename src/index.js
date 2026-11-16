@@ -7,6 +7,7 @@ import { addSite, cleanDomain, listDomains, ownerOf } from './sites.js';
 import { bearerLogin, createToken, listTokens, revokeToken } from './tokens.js';
 import { mcpResponse } from './mcp.js';
 import { publicFile } from './public-files.js';
+import { withSecurityHeaders } from './security-headers.js';
 
 export { cleanDomain };
 
@@ -14,7 +15,8 @@ const SECURITY = {
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
   'referrer-policy': 'same-origin',
-  'strict-transport-security': 'max-age=31536000',
+  'strict-transport-security': 'max-age=31536000; includeSubDomains',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
   'content-security-policy': "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline' https://flisk.si https://flisk.sh https://flisk.sh; img-src 'self' data: https://flisk.si; form-action 'self'; connect-src 'self' https://flisk.sh https://flisk.sh; frame-ancestors 'none'; base-uri 'none'",
 };
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
@@ -28,6 +30,10 @@ const READ_ONLY_PAGES = /^\/(new|site\/[^/]+(\/install)?)?$/;
 const cookieOf = (request, name) => new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(request.headers.get('cookie') || '')?.[1] || '';
 
 export async function handle(request, env) {
+  return withSecurityHeaders(await route(request, env));
+}
+
+async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
