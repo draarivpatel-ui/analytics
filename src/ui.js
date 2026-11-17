@@ -54,8 +54,8 @@ export function newSitePage(login, error = '') {
 
 const DASH_JS = `
 var SITE=window.__SITE,range=new URLSearchParams(location.search).get('r')||'30d',data={},tabState={};
-var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns'],['Themes','themes']],head:'Source'},{tabs:[['Top pages','pages']],head:'Page'},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities']],head:'Country'},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']],head:'Browser'}];
-var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',themes:'Theme',pages:'Page',countries:'Country',regions:'Region',cities:'City',browsers:'Browser',os:'Operating system',devices:'Device'};
+var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns'],['Themes','themes']],head:'Source'},{tabs:[['Top pages','pages']],head:'Page'},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities'],['Add a language','languages']],head:'Country'},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']],head:'Browser'}];
+var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',themes:'Theme',pages:'Page',countries:'Country',regions:'Region',cities:'City',languages:'Language',browsers:'Browser',os:'Operating system',devices:'Device'};
 function fmt(n){return n==null?'—':n.toLocaleString('en-US')}
 function dur(s){if(s==null)return '—';var m=Math.floor(s/60);return m?m+'m '+(s%60)+'s':s+'s'}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -68,7 +68,7 @@ for(var k=0;k<5;k++){var y=t+(h-t-b)*k/4;s+='<line class="grid" x1="'+l+'" x2="'
 for(var k=0;k<5;k++){var i=Math.round(k*(n-1)/4),x=l+i*(w-l-r)/Math.max(n-1,1),d=new Date(series[i].t.replace(' ','T')+'Z'),lab=range==='today'?d.getUTCHours()+':00':d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});s+='<text class="ax" x="'+x+'" y="'+(h-6)+'" text-anchor="'+(k==0?'start':k==4?'end':'middle')+'">'+lab+'</text>'}
 var d='M'+p.map(function(x){return x[0].toFixed(1)+','+x[1].toFixed(1)}).join(' L'),e=p[p.length-1];
 return s+'<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="s1"/><stop offset="1" class="s2"/></linearGradient></defs><path class="ar" d="'+d+' L'+e[0]+','+(h-b)+' L'+p[0][0]+','+(h-b)+' Z" fill="url(#g)"/><path class="ln" d="'+d+'"/><circle class="dot" cx="'+e[0]+'" cy="'+e[1]+'" r="4"/></svg>'}
-function rows(list){if(!list||!list.length)return '<div class="empty" style="padding:18px 0">No data yet</div>';var m=list[0].v;return list.map(function(x){return '<div class="r"><i class="fill" style="width:'+(x.v/m*100).toFixed(0)+'%"></i><span class="rl"><em class="ic">'+esc(x.k[0]||'?').toUpperCase()+'</em>'+esc(x.k)+'</span><span class="rv">'+fmt(x.v)+'</span></div>'}).join('')}
+function rows(list){if(!list||!list.length)return '<div class="empty" style="padding:18px 0">No data yet</div>';var m=list[0].v;return list.map(function(x){return '<div class="r"><i class="fill" style="width:'+(x.v/m*100).toFixed(0)+'%"></i><span class="rl"><em class="ic">'+esc(x.k[0]||'?').toUpperCase()+'</em>'+esc(x.k)+(x.n?'<small class="m" style="color:var(--dim);margin-left:4px">'+esc(x.n)+'</small>':'')+'</span><span class="rv">'+fmt(x.v)+'</span></div>'}).join('')}
 function panel(i){var D=DEFS[i],key=tabState[i]||D.tabs[0][1],tabs=D.tabs.map(function(t){return '<a data-p="'+i+'" data-k="'+t[1]+'" class="'+(t[1]===key?'on':'')+'">'+t[0]+'</a>'}).join('');
 return '<header class="tabs">'+tabs+'</header><div class="th"><span>'+HEAD[key]+'</span><span>Visitors</span></div>'+(data[key]?rows(data[key]):'<div class="empty skel" style="padding:18px 0">Loading…</div>')}
 function drawPanels(){for(var i=0;i<4;i++)document.getElementById('p'+i).innerHTML=panel(i)}
