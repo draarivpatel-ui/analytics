@@ -54,11 +54,10 @@ export function fillSeries(rows, range, now = Date.now()) {
 
 async function overview(env, site, range, sql) {
   const { n, step } = RANGES[range];
-  const [cur, prev, series, live, sess] = await Promise.all([
+  const [cur, prev, series, sess] = await Promise.all([
     sql(`SELECT SUM(_sample_interval) AS pv, COUNT(DISTINCT blob8) AS uv, COUNT(DISTINCT blob9) AS visits ${base(site, win(n))}`),
     sql(`SELECT SUM(_sample_interval) AS pv, COUNT(DISTINCT blob8) AS uv, COUNT(DISTINCT blob9) AS visits ${base(site, win(n, true))}`),
     sql(`SELECT toStartOfInterval(timestamp, INTERVAL '1' ${step}) AS t, COUNT(DISTINCT blob8) AS v ${base(site, win(n))} GROUP BY t ORDER BY t`),
-    sql(`SELECT COUNT(DISTINCT blob8) AS v ${base(site, "timestamp > NOW() - INTERVAL '5' MINUTE")}`),
     // Bounce and duration need a subquery. If Analytics Engine refuses it these two show a dash instead of failing the page.
     sql(`SELECT COUNT() AS sessions, SUM(IF(pv = 1, 1, 0)) AS bounces, AVG(dur) AS dur FROM (SELECT blob9 AS sid, SUM(_sample_interval) AS pv, toUnixTimestamp(MAX(timestamp)) - toUnixTimestamp(MIN(timestamp)) AS dur ${base(site, win(n))} GROUP BY sid)`).catch(() => null),
   ]);
@@ -68,7 +67,7 @@ async function overview(env, site, range, sql) {
     return { visitors: num(x.uv), visits, pageviews: pv, viewsPerVisit: visits ? +(pv / visits).toFixed(2) : 0,
       bounceRate: s && num(s.sessions) ? Math.round((num(s.bounces) / num(s.sessions)) * 100) : null, duration: s ? Math.round(num(s.dur)) : null };
   };
-  return { current: metrics(a, sess?.[0]), previous: metrics(p, null), series: fillSeries(series, range), live: num(live[0]?.v) };
+  return { current: metrics(a, sess?.[0]), previous: metrics(p, null), series: fillSeries(series, range) };
 }
 
 async function panel(env, site, range, key, sql) {
@@ -100,7 +99,12 @@ export async function siteStats(env, site, range, parts, { sql = (q) => runSql(e
   if (!validDomain(site) || !RANGES[range]) return null;
   const { ttl } = RANGES[range];
   const want = [...new Set(parts.filter((p) => PANELS[p] || DERIVED.includes(p)))];
-  const out = { site, range, ...(await cached(cache, `${site}/${range}/overview`, ttl, () => overview(env, site, range, sql))), panels: {} };
+  // "Current visitors" is cached for 15 seconds, not for the range's TTL, or it shows 0 for ten minutes after you open the site.
+  const [main, live] = await Promise.all([
+    cached(cache, `${site}/${range}/overview`, ttl, () => overview(env, site, range, sql)),
+    cached(cache, `${site}/live`, 15, async () => num((await sql(`SELECT COUNT(DISTINCT blob8) AS v ${base(site, "timestamp > NOW() - INTERVAL '5' MINUTE")}`))[0]?.v)),
+  ]);
+  const out = { site, range, ...main, live, panels: {} };
   await Promise.all(want.map(async (p) => { out.panels[p] = await cached(cache, `${site}/${range}/${p}`, ttl, () => panel(env, site, range, p, sql)); }));
   return out;
 }
