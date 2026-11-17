@@ -13,14 +13,25 @@
     if (!t) { t = h.getAttribute('data-theme') || ''; if (/^\s*(light|dark)\s*$/i.test(t)) t = ''; }
     return String(t || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32);
   }
+  function post(o) {
+    o.d = d; o.s = sid(); o.t = theme();
+    var body = JSON.stringify(o);
+    if (navigator.sendBeacon) navigator.sendBeacon(api, body); else fetch(api, { method: 'POST', body: body, keepalive: true });
+  }
   function send() {
     var p = location.pathname;
     if (p === last) return; // reloads and repeat route events count once
     last = p;
-    var u = new URLSearchParams(location.search).get('utm_campaign') || '';
-    var body = JSON.stringify({ d: d, p: p, r: document.referrer, s: sid(), u: u, t: theme() });
-    if (navigator.sendBeacon) navigator.sendBeacon(api, body); else fetch(api, { method: 'POST', body: body, keepalive: true });
+    post({ p: p, r: document.referrer, u: new URLSearchParams(location.search).get('utm_campaign') || '' });
   }
+  // Link clicks: links that leave the site and file downloads. Host and path only, never the query.
+  addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href]'), u;
+    if (!a) return;
+    try { u = new URL(a.href, location.href); } catch (x) { return; }
+    if (!/^https?:$/.test(u.protocol)) return;
+    if (u.host !== location.host || /\.(zip|pdf|dmg|exe|pkg|tgz|gz|csv|xlsx?|mp4)$/i.test(u.pathname)) post({ e: 'click', p: location.pathname, l: u.host + u.pathname });
+  }, true);
   var ps = history.pushState; // single-page apps
   if (ps) history.pushState = function () { ps.apply(this, arguments); setTimeout(send, 0); };
   addEventListener('popstate', send);

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { fakeCache } from './helpers.js';
-import { fillSeries, sitesOverview, siteStats, validDomain } from '../src/stats.js';
+import { fillBuckets, fillSeries, resolveWindow, siteLogs, sitesOverview, siteStats, validDomain } from '../src/stats.js';
 
 const day = (n, now) => new Date(now - n * 86400e3).toISOString().slice(0, 10) + ' 00:00:00';
 
@@ -72,4 +72,42 @@ test('the themes panel reads blob13, skips empty themes and is accepted like cam
   expect(out.panels.themes).toEqual([{ k: 'ivory', v: 4 }]);
   const q = seen.find((x) => x.includes('blob13 AS k'));
   expect(q).toContain("blob13 != ''");
+});
+
+test('resolveWindow: presets, custom windows rounded to hours, auto step, the by override and bad input', () => {
+  const now = Date.UTC(2026, 10, 17, 12, 30);
+  expect(resolveWindow({ range: '7d' }, now).step).toBe('DAY');
+  expect(resolveWindow({ range: '7d', by: 'hour' }, now).count).toBe(168);
+  expect(resolveWindow({ range: 'nope' }, now)).toBeNull();
+  const h = resolveWindow({ from: Date.UTC(2026, 10, 15, 3, 20), to: Date.UTC(2026, 10, 16, 5, 10) }, now);
+  expect(h.step).toBe('HOUR');
+  expect(h.from).toBe(Date.UTC(2026, 10, 15, 3));
+  expect(h.to).toBe(Date.UTC(2026, 10, 16, 6));
+  expect(h.count).toBe(27);
+  expect(resolveWindow({ from: now - 60 * 86400e3, to: now }, now).step).toBe('DAY');
+  expect(resolveWindow({ from: now - 200 * 86400e3, to: now }, now).step).toBe('WEEK');
+  expect(resolveWindow({ from: now, to: now - 86400e3 }, now)).toBeNull();
+  expect(resolveWindow({ from: now - 500 * 86400e3, to: now }, now)).toBeNull();
+  expect(resolveWindow({ range: '12m', by: 'hour' }, now).step).not.toBe('HOUR'); // too many buckets, coarsened
+});
+
+test('fillBuckets carries visitors, visits and pageviews per bucket', () => {
+  const now = Date.UTC(2026, 10, 17, 12);
+  const s = fillBuckets([{ t: '2026-11-17 12:00:00', v: '4', pv: '9', vs: '5' }], 'HOUR', 3, now);
+  expect(s).toHaveLength(3);
+  expect(s.at(-1)).toMatchObject({ v: 4, pv: 9, vs: 5 });
+  expect(s[0]).toMatchObject({ v: 0, pv: 0, vs: 0 });
+});
+
+test('siteLogs: newest events, kind filter, limit clamp, cache, bad domain', async () => {
+  const seen = [];
+  const sql = async (q) => { seen.push(q); return [{ t: '2026-11-17 10:00:00', kind: 'click', path: '/', target: 'x.com/a', source: 'GitHub', country: 'DE', city: 'Berlin', browser: 'Chrome', os: 'macOS', device: 'Desktop', visitor: 'abcdef0123456789' }]; };
+  const cache = fakeCache();
+  const ev = await siteLogs({}, 'flisk.sh', { limit: 9999, kind: 'click' }, { sql, cache });
+  expect(ev[0]).toMatchObject({ t: '2026-11-17T10:00:00Z', kind: 'click', target: 'x.com/a', visitor: 'abcdef' });
+  expect(seen[0]).toContain("blob14 = 'click'");
+  expect(seen[0]).toContain('LIMIT 200');
+  await siteLogs({}, 'flisk.sh', { limit: 9999, kind: 'click' }, { sql, cache });
+  expect(seen).toHaveLength(1);
+  expect(await siteLogs({}, "x'; DROP", {}, { sql, cache })).toBeNull();
 });

@@ -53,36 +53,83 @@ export function newSitePage(login, error = '') {
 }
 
 const DASH_JS = `
-var SITE=window.__SITE,range=new URLSearchParams(location.search).get('r')||'30d',data={},tabState={};
-var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns'],['Themes','themes']],head:'Source'},{tabs:[['Top pages','pages']],head:'Page'},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities']],head:'Country'},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']],head:'Browser'}];
-var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',themes:'Theme',pages:'Page',countries:'Country',regions:'Region',cities:'City',browsers:'Browser',os:'Operating system',devices:'Device'};
+var SITE=window.__SITE,Q=new URLSearchParams(location.search),range=Q.get('r')||'30d',from=+Q.get('from')||0,to=+Q.get('to')||0,by=Q.get('by')||'',metric='v',data={},tabState={},cur=null,logs=[],logKind='';
+var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns'],['Themes','themes']]},{tabs:[['Top pages','pages'],['Link clicks','links']]},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities']]},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']]}];
+var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',themes:'Theme',pages:'Page',links:'Link',countries:'Country',regions:'Region',cities:'City',browsers:'Browser',os:'Operating system',devices:'Device'};
+var ML={v:'Visitors',vs:'Visits',pv:'Pageviews'},STEP_MS={hour:3600000,day:86400000,week:604800000},geo={};
 function fmt(n){return n==null?'—':n.toLocaleString('en-US')}
 function dur(s){if(s==null)return '—';var m=Math.floor(s/60);return m?m+'m '+(s%60)+'s':s+'s'}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function qs(){return 'range='+encodeURIComponent(range)+(from?'&from='+from+'&to='+to:'')+(by?'&by='+by:'')}
+function when(t){return new Date(t.replace(' ','T')+'Z')}
+function lab(t,step,long){var d=when(t);
+if(step==='hour')return d.toLocaleString('en-US',long?{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZoneName:'short'}:{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+if(step==='week')return (long?'Week of ':'')+d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
+return d.toLocaleDateString('en-US',long?{weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}:{month:'short',day:'numeric',timeZone:'UTC'})}
 function delta(c,p,inv){if(!p)return '';var d=Math.round((c-p)/p*100),good=inv?d<=0:d>=0;return '<i class="kd '+(good?'up':'dn')+'">'+(d>=0?'↗ ':'↘ ')+Math.abs(d)+'%</i>'}
-function kpis(o){var c=o.current,p=o.previous,K=[['Unique visitors',fmt(c.visitors),delta(c.visitors,p.visitors)],['Total visits',fmt(c.visits),delta(c.visits,p.visits)],['Pageviews',fmt(c.pageviews),delta(c.pageviews,p.pageviews)],['Views / visit',c.viewsPerVisit||'—',delta(c.viewsPerVisit,p.viewsPerVisit)],['Bounce rate',c.bounceRate==null?'—':c.bounceRate+'%',''],['Visit duration',dur(c.duration),'']];
-return K.map(function(k,i){return '<div class="k'+(i?'':' on')+'"><span class="kl">'+k[0]+'</span><b class="kv">'+k[1]+'</b>'+k[2]+'</div>'}).join('')}
-function chart(series){var w=1190,h=320,l=40,r=10,t=12,b=26,v=series.map(function(s){return s.v}),st=Math.max(1,Math.ceil((Math.max.apply(null,v)||0)*1.12/4)),mx=st*4,n=v.length,s='<svg class="ch" viewBox="0 0 '+w+' '+h+'">';
-var p=v.map(function(x,i){return [l+i*(w-l-r)/Math.max(n-1,1),t+(h-t-b)*(1-x/mx)]});
+function kpis(o){var c=o.current,p=o.previous,K=[['Unique visitors',fmt(c.visitors),delta(c.visitors,p.visitors),'v'],['Total visits',fmt(c.visits),delta(c.visits,p.visits),'vs'],['Pageviews',fmt(c.pageviews),delta(c.pageviews,p.pageviews),'pv'],['Views / visit',c.viewsPerVisit||'—',delta(c.viewsPerVisit,p.viewsPerVisit),''],['Bounce rate',c.bounceRate==null?'—':c.bounceRate+'%','',''],['Visit duration',dur(c.duration),'','']];
+return K.map(function(k){return '<div class="k'+(k[3]===metric?' on':'')+(k[3]?' pick':'')+'"'+(k[3]?' data-m="'+k[3]+'" title="Show '+ML[k[3]].toLowerCase()+' on the chart"':'')+'><span class="kl">'+k[0]+'</span><b class="kv">'+k[1]+'</b>'+k[2]+'</div>'}).join('')}
+function toolbar(o){var f=o.series[0],l=o.series[o.series.length-1],st=o.step,zoomed=!!from;
+var iv=['hour','day','week'].map(function(s){return '<a data-by="'+s+'" class="'+(s===st?'on':'')+'">'+s+'</a>'}).join('');
+return '<span class="m">'+ML[metric]+' per '+st+' · '+lab(f.t,st)+' – '+lab(l.t,st)+'</span><span class="cg"><span class="m hint">Drag on the chart to zoom</span><span class="seg iv">'+iv+'</span>'+(zoomed?'<a class="rz" id="rz">Reset zoom</a>':'')+'</span>'}
+function chart(series,step){var w=1190,h=320,l=40,r=10,t=12,b=26,n=series.length,v=series.map(function(s){return s[metric]}),tot=v.reduce(function(a,x){return a+x},0),st=Math.max(1,Math.ceil((Math.max.apply(null,v)||0)*1.12/4)),mx=st*4;
+geo={w:w,h:h,l:l,r:r,t:t,b:b,mx:mx};
+function X(i){return l+i*(w-l-r)/Math.max(n-1,1)}function Y(x){return t+(h-t-b)*(1-x/mx)}
+var s='<svg class="ch" id="svg" viewBox="0 0 '+w+' '+h+'">';
 for(var k=0;k<5;k++){var y=t+(h-t-b)*k/4;s+='<line class="grid" x1="'+l+'" x2="'+(w-r)+'" y1="'+y+'" y2="'+y+'"/><text class="ax" x="'+(l-8)+'" y="'+(y+4)+'" text-anchor="end">'+st*(4-k)+'</text>'}
-for(var k=0;k<5;k++){var i=Math.round(k*(n-1)/4),x=l+i*(w-l-r)/Math.max(n-1,1),d=new Date(series[i].t.replace(' ','T')+'Z'),lab=range==='today'?d.getUTCHours()+':00':d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});s+='<text class="ax" x="'+x+'" y="'+(h-6)+'" text-anchor="'+(k==0?'start':k==4?'end':'middle')+'">'+lab+'</text>'}
-var d='M'+p.map(function(x){return x[0].toFixed(1)+','+x[1].toFixed(1)}).join(' L'),e=p[p.length-1];
-return s+'<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="s1"/><stop offset="1" class="s2"/></linearGradient></defs><path class="ar" d="'+d+' L'+e[0]+','+(h-b)+' L'+p[0][0]+','+(h-b)+' Z" fill="url(#g)"/><path class="ln" d="'+d+'"/><circle class="dot" cx="'+e[0]+'" cy="'+e[1]+'" r="4"/></svg>'}
-function rows(list){if(!list||!list.length)return '<div class="empty" style="padding:18px 0">No data yet</div>';var m=list[0].v;return list.map(function(x){return '<div class="r"><i class="fill" style="width:'+(x.v/m*100).toFixed(0)+'%"></i><span class="rl"><em class="ic">'+esc(x.k[0]||'?').toUpperCase()+'</em>'+esc(x.k)+'</span><span class="rv">'+fmt(x.v)+'</span></div>'}).join('')}
-function panel(i){var D=DEFS[i],key=tabState[i]||D.tabs[0][1],tabs=D.tabs.map(function(t){return '<a data-p="'+i+'" data-k="'+t[1]+'" class="'+(t[1]===key?'on':'')+'">'+t[0]+'</a>'}).join('');
-return '<header class="tabs">'+tabs+'</header><div class="th"><span>'+HEAD[key]+'</span><span>Visitors</span></div>'+(data[key]?rows(data[key]):'<div class="empty skel" style="padding:18px 0">Loading…</div>')}
+var nl=Math.min(6,n);for(var k=0;k<nl;k++){var i=Math.round(k*(n-1)/Math.max(nl-1,1));s+='<text class="ax" x="'+X(i)+'" y="'+(h-6)+'" text-anchor="'+(k==0?'start':k==nl-1?'end':'middle')+'">'+lab(series[i].t,step)+'</text>'}
+var p=v.map(function(x,i){return [X(i),Y(x)]}),d='M'+p.map(function(x){return x[0].toFixed(1)+','+x[1].toFixed(1)}).join(' L'),e=p[p.length-1];
+s+='<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="s1"/><stop offset="1" class="s2"/></linearGradient></defs><path class="ar" d="'+d+' L'+e[0]+','+(h-b)+' L'+p[0][0]+','+(h-b)+' Z" fill="url(#g)"/><path class="ln" d="'+d+'"/><circle class="dot" cx="'+e[0]+'" cy="'+e[1]+'" r="4"/>';
+if(!tot)s+='<text class="ax" x="'+(w/2)+'" y="'+(h/2)+'" text-anchor="middle">No '+ML[metric].toLowerCase()+' in this window</text>';
+return s+'<rect id="sel" class="sel" x="0" y="'+t+'" width="0" height="'+(h-t-b)+'" style="display:none"/><line id="xh" class="xh" x1="0" x2="0" y1="'+t+'" y2="'+(h-b)+'" style="display:none"/><circle id="xd" class="dot" r="5" cx="0" cy="0" style="display:none"/></svg>'}
+function bind(series,step){var svg=document.getElementById('svg'),tip=document.getElementById('tip'),box=document.getElementById('cbox'),n=series.length,g=geo,drag=null;
+function X(i){return g.l+i*(g.w-g.l-g.r)/Math.max(n-1,1)}
+function idx(e){var b=svg.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*g.w,i=Math.round((x-g.l)/(g.w-g.l-g.r)*(n-1));return Math.max(0,Math.min(n-1,i))}
+function hide(){tip.style.display='none';document.getElementById('xh').style.display='none';document.getElementById('xd').style.display='none'}
+svg.onpointermove=function(e){var i=idx(e),s=series[i],x=X(i),y=g.t+(g.h-g.t-g.b)*(1-s[metric]/g.mx),xh=document.getElementById('xh'),xd=document.getElementById('xd');
+xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.style.display='';xd.setAttribute('cx',x);xd.setAttribute('cy',y);xd.style.display='';
+if(drag){var a=Math.min(drag.i,i),z=Math.max(drag.i,i),sel=document.getElementById('sel');sel.setAttribute('x',X(a));sel.setAttribute('width',X(z)-X(a));sel.style.display=''}
+var rows=['v','vs','pv'].map(function(m){return '<div class="tr'+(m===metric?' on':'')+'"><span>'+ML[m]+'</span><b>'+fmt(s[m])+'</b></div>'}).join('');
+tip.innerHTML='<div class="tt">'+lab(s.t,step,true)+'</div>'+rows+(drag?'':'<div class="th2">Drag to zoom</div>');tip.style.display='block';
+var bb=box.getBoundingClientRect(),lx=e.clientX-bb.left+16,ly=e.clientY-bb.top-tip.offsetHeight/2;if(lx+tip.offsetWidth>bb.width-8)lx=e.clientX-bb.left-tip.offsetWidth-16;tip.style.left=Math.max(8,lx)+'px';tip.style.top=Math.max(8,ly)+'px'};
+svg.onpointerdown=function(e){drag={i:idx(e)};try{svg.setPointerCapture(e.pointerId)}catch(x){}};
+svg.onpointerup=function(e){if(!drag)return;var a=Math.min(drag.i,idx(e)),z=Math.max(drag.i,idx(e));drag=null;document.getElementById('sel').style.display='none';if(z>a)zoom(series[a].t,series[z].t,step)};
+svg.onpointerleave=function(){if(!drag)hide()};svg.onpointercancel=function(){drag=null;hide()};
+svg.ondblclick=function(){if(from)resetZoom()}}
+function zoom(t0,t1,step){from=when(t0).getTime();to=when(t1).getTime()+STEP_MS[step];by='';reload()}
+function resetZoom(){from=to=0;by='';reload()}
+function rows(list,key){if(!list||!list.length)return '<div class="empty" style="padding:18px 0">'+(key==='links'?'No link clicks yet. Links that leave the site and file downloads show up here.':'No data yet')+'</div>';var m=list[0].v;return list.map(function(x){return '<div class="r"><i class="fill" style="width:'+(x.v/m*100).toFixed(0)+'%"></i><span class="rl"><em class="ic">'+esc(x.k[0]||'?').toUpperCase()+'</em>'+esc(x.k)+'</span><span class="rv">'+fmt(x.v)+'</span></div>'}).join('')}
+function keyOf(i){return tabState[i]||DEFS[i].tabs[0][1]}
+function panel(i){var D=DEFS[i],key=keyOf(i),tabs=D.tabs.map(function(t){return '<a data-p="'+i+'" data-k="'+t[1]+'" class="'+(t[1]===key?'on':'')+'">'+t[0]+'</a>'}).join('');
+return '<header class="tabs">'+tabs+'</header><div class="th"><span>'+HEAD[key]+'</span><span>'+(key==='links'?'Clicks':'Visitors')+'</span></div>'+(data[key]?rows(data[key],key):'<div class="empty skel" style="padding:18px 0">Loading…</div>')}
 function drawPanels(){for(var i=0;i<4;i++)document.getElementById('p'+i).innerHTML=panel(i)}
-function load(parts){return fetch('/api/stats?site='+encodeURIComponent(SITE)+'&range='+range+'&parts='+parts.join(',')).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){for(var k in j.panels)data[k]=j.panels[k];return j})}
-function head(j){document.getElementById('live').textContent=j.live+' current visitor'+(j.live==1?'':'s');document.getElementById('kpis').innerHTML=kpis(j);document.getElementById('chart').innerHTML=chart(j.series)}
+function load(parts){return fetch('/api/stats?site='+encodeURIComponent(SITE)+'&'+qs()+'&parts='+parts.join(',')).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){for(var k in j.panels)data[k]=j.panels[k];return j})}
+function drawChart(){if(!cur)return;document.getElementById('kpis').innerHTML=kpis(cur);document.getElementById('ctool').innerHTML=toolbar(cur);document.getElementById('chart').innerHTML=chart(cur.series,cur.step);bind(cur.series,cur.step)}
+function head(j){cur=j;document.getElementById('live').textContent=j.live+' current visitor'+(j.live==1?'':'s');drawChart()}
 function fail(){document.getElementById('chart').innerHTML='<div class="empty">Could not load the numbers. Reload in a minute.</div>'}
-document.querySelectorAll('.seg a').forEach(function(a){a.className=a.dataset.r===range?'on':'';a.onclick=function(){var u=new URL(location.href);u.searchParams.set('r',a.dataset.r);location.href=u}});
-document.addEventListener('click',function(e){var a=e.target.closest('.tabs a');if(!a)return;var i=+a.dataset.p,k=a.dataset.k;tabState[i]=k;drawPanels();if(!data[k])load([k]).then(drawPanels).catch(function(){})});
-drawPanels();load(['channels','pages','countries','browsers']).then(function(j){head(j);drawPanels()}).catch(fail);
+function sync(){var u=new URL(location.href);['from','to','by'].forEach(function(k){u.searchParams.delete(k)});u.searchParams.set('r',range);if(from){u.searchParams.set('from',from);u.searchParams.set('to',to)}if(by)u.searchParams.set('by',by);history.replaceState(null,'',u);
+document.querySelectorAll('.seg.rg a').forEach(function(a){a.className=!from&&a.dataset.r===range?'on':''})}
+function reload(){data={};sync();document.getElementById('chart').classList.add('skel');var parts=[0,1,2,3].map(keyOf);drawPanels();load(parts).then(function(j){document.getElementById('chart').classList.remove('skel');head(j);drawPanels()}).catch(fail)}
+document.querySelectorAll('.seg.rg a').forEach(function(a){a.onclick=function(){range=a.dataset.r;from=to=0;by='';reload()}});
+document.addEventListener('click',function(e){var t=e.target,a=t.closest('.tabs a[data-p]');
+if(a){var i=+a.dataset.p,k=a.dataset.k;tabState[i]=k;drawPanels();if(!data[k])load([k]).then(drawPanels).catch(function(){});return}
+var m=t.closest('.k[data-m]');if(m){metric=m.dataset.m;drawChart();return}
+var b=t.closest('[data-by]');if(b){by=b.dataset.by;reload();return}
+if(t.closest('#rz')){resetZoom();return}
+var lk=t.closest('[data-lk]');if(lk){logKind=lk.dataset.lk;loadLogs()}});
+function ago(d){var s=Math.max(0,Math.round((Date.now()-d)/1000));return s<60?s+'s ago':s<3600?Math.floor(s/60)+'m ago':s<86400?Math.floor(s/3600)+'h ago':Math.floor(s/86400)+'d ago'}
+function drawLogs(){var tabs=[['','All events'],['pageview','Pageviews'],['click','Link clicks']].map(function(x){return '<a data-lk="'+x[0]+'" class="'+(x[0]===logKind?'on':'')+'">'+x[1]+'</a>'}).join('');
+var body=logs.length?logs.map(function(x){var d=new Date(x.t),place=[x.city,x.country].filter(Boolean).join(', ')||'—',what=x.kind==='click'?'<b>→ '+esc(x.target)+'</b> <small>on '+esc(x.path)+'</small>':esc(x.path||'/');
+return '<div class="lg"><span class="lt">'+d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'})+' <small>'+ago(d)+'</small></span><span><em class="bd '+x.kind+'">'+(x.kind==='click'?'Click':'View')+'</em></span><span class="lw">'+what+'</span><span>'+esc(x.source||'—')+'</span><span>'+esc(place)+'</span><span>'+esc([x.browser,x.os].filter(Boolean).join(' · ')||'—')+'</span></div>'}).join(''):'<div class="empty">No events in the last 7 days.</div>';
+document.getElementById('logs').innerHTML='<header class="tabs ltabs">'+tabs+'<span class="exp m">Live · newest first · local time</span></header><div class="lgw"><div class="lg lh"><span>Time</span><span>Event</span><span>Page / link</span><span>Source</span><span>Place</span><span>Device</span></div>'+body+'</div>'}
+function loadLogs(){fetch('/api/logs?site='+encodeURIComponent(SITE)+'&limit=100&kind='+logKind).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){logs=j.events;drawLogs()}).catch(function(){document.getElementById('logs').innerHTML='<div class="empty">Could not load the log. Reload in a minute.</div>'})}
+sync();drawPanels();load([0,1,2,3].map(keyOf)).then(function(j){head(j);drawPanels()}).catch(fail);
+loadLogs();setInterval(function(){if(document.visibilityState==='visible')loadLogs()},30000);
 `;
 
 export function dashboardPage(login, site) {
   const seg = [['today', 'Today'], ['7d', '7D'], ['30d', '30D'], ['12m', '12M']].map(([r, n]) => `<a data-r="${r}">${n}</a>`).join('');
-  const inner = `<div class="dh"><div class="dl"><a class="sw" href="/">← Sites</a><span class="sw"><em class="fav">${esc(site[0].toUpperCase())}</em>${esc(site)}</span><span class="live"><i></i><span id="live">… current visitors</span></span></div><div class="dr"><a class="ctl" href="/site/${esc(site)}/install">Install</a><div class="seg">${seg}</div></div></div><div class="kpis" id="kpis"><div class="k on"><span class="kl">Unique visitors</span><b class="kv">…</b></div></div><div class="cbox" id="chart"><div class="empty skel">Loading…</div></div><div class="panels">${[0, 1, 2, 3].map((i) => `<section class="panel" id="p${i}"></section>`).join('')}</div>`;
+  const inner = `<div class="dh"><div class="dl"><a class="sw" href="/">← Sites</a><span class="sw"><em class="fav">${esc(site[0].toUpperCase())}</em>${esc(site)}</span><span class="live"><i></i><span id="live">… current visitors</span></span></div><div class="dr"><a class="ctl" href="/site/${esc(site)}/install">Install</a><div class="seg rg">${seg}</div></div></div><div class="kpis" id="kpis"><div class="k on"><span class="kl">Unique visitors</span><b class="kv">…</b></div></div><div class="cbox" id="cbox"><div class="ctool" id="ctool"></div><div id="chart"><div class="empty skel">Loading…</div></div><div class="tip" id="tip"></div></div><div class="panels">${[0, 1, 2, 3].map((i) => `<section class="panel" id="p${i}"></section>`).join('')}</div><section class="logs" id="logs"><div class="empty skel">Loading the log…</div></section>`;
   return layout(`${site} · Flisk Analytics`, shell(login, 'Sites', inner), `window.__SITE=${JSON.stringify(site)};${DASH_JS}`);
 }
 

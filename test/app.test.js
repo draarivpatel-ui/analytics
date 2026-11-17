@@ -173,3 +173,10 @@ test('GET / has exactly one main landmark, signed out and signed in', async () =
   expect(signedIn.indexOf('<header class="top">')).toBeLessThan(signedIn.indexOf('<main'));
 });
 
+
+test('the logs route is owner-only and degrades to 502 without a Cloudflare token', async () => {
+  const env = fakeEnv();
+  env.sites.set('theirs.example', 'other');
+  expect((await as(env, 'odykyi', '/api/logs?site=theirs.example')).status).toBe(404);
+  expect((await as(env, 'odykyi', '/api/logs?site=flisk.sh')).status).toBe(502);
+});
