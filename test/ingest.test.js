@@ -125,3 +125,16 @@ test('a link click writes one data point with kind click and a cleaned target; j
   expect(pv.points[0].blobs[13]).toBe('');
   expect(cleanLink('https://a.b/' + 'x'.repeat(300)).length).toBeLessThanOrEqual(120);
 });
+
+test('the visitor language is the primary subtag of the first Accept-Language tag, and nothing else', async () => {
+  const { primaryLanguage } = await import('../src/ingest.js');
+  expect(primaryLanguage('nl-NL,nl;q=0.9,en;q=0.8')).toBe('nl');
+  expect(primaryLanguage('hi')).toBe('hi');
+  expect(primaryLanguage('DE_at;q=0.8')).toBe('de');
+  for (const bad of ['', '*', 'x', '1234', '<script>', null, undefined]) expect(primaryLanguage(bad)).toBe('');
+  const env = fakeEnv();
+  await handleBeacon(beacon({ d: 'flisk.sh', p: '/' }, { 'accept-language': 'nl-NL,en;q=0.8' }), env);
+  await handleBeacon(beacon({ d: 'flisk.sh', p: '/' }), env);
+  expect(env.points.map((p) => p.blobs[15])).toEqual(['nl', '']);
+  expect(JSON.stringify(env.points[0])).not.toContain('NL');
+});

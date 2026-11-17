@@ -10,7 +10,7 @@ const LANG_BY_COUNTRY = {
 
 const regionNames = typeof Intl !== 'undefined' && Intl.DisplayNames ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
 const langNames = typeof Intl !== 'undefined' && Intl.DisplayNames ? new Intl.DisplayNames(['en'], { type: 'language' }) : null;
-const nameOf = (code) => { try { return langNames?.of(code) || code; } catch { return code; } };
+export const nameOf = (code) => { try { return langNames?.of(code) || code; } catch { return code; } };
 
 const LANG_BY_COUNTRY_NAME = new Map();
 for (const [cc, lang] of Object.entries(LANG_BY_COUNTRY)) {

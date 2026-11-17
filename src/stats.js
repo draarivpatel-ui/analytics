@@ -1,14 +1,14 @@
 // Reads the dashboard numbers from Analytics Engine through its SQL API.
 // Free plan: 10,000 SQL reads a day, so every answer is cached (Cache API, free) and one page load asks for everything at once.
 
-import { suggestLanguages } from './languages.js';
+import { nameOf, suggestLanguages } from './languages.js';
 
 const DATASET = 'flisk_analytics';
 export const RANGES = { today: { n: 1, step: 'HOUR', ttl: 60 }, '7d': { n: 7, step: 'DAY', ttl: 300 }, '30d': { n: 30, step: 'DAY', ttl: 600 }, '12m': { n: 365, step: 'WEEK', ttl: 3600 } };
 export const PANELS = {
   channels: 'blob3', sources: 'blob2', campaigns: 'blob10', themes: 'blob13', pages: 'blob1',
   countries: 'blob4', regions: 'blob11', cities: 'blob12',
-  browsers: 'blob5', os: 'blob6', devices: 'blob7', links: 'blob15',
+  browsers: 'blob5', os: 'blob6', devices: 'blob7', links: 'blob15', visitorlangs: 'blob16',
 };
 // Link clicks are their own data points (blob14 = 'click'); everything else counts pageviews only (blob14 = '').
 const KIND = { links: 'click' };
@@ -115,11 +115,15 @@ async function languages(site, w, sql) {
   return suggestLanguages(countries, pages);
 }
 
+// Share of all visitors in the window, as a whole percent. A visitor with no language sent is in the total but in no row.
+const withShare = (list, total) => list.map((x) => ({ ...x, n: total ? `${Math.round((x.v / total) * 100)}%` : '' }));
+
 async function panel(env, site, w, key, sql) {
   if (key === 'languages') return languages(site, w, sql);
   const col = PANELS[key], kind = KIND[key] || '';
   const agg = kind ? 'SUM(_sample_interval)' : 'COUNT(DISTINCT blob8)';
   const rows = await sql(`SELECT ${col} AS k, ${agg} AS v ${base(site, win(w), kind)} AND ${col} != '' GROUP BY k ORDER BY v DESC LIMIT 10`);
+  if (key === 'visitorlangs') return withShare(rows.map((r) => ({ k: nameOf(String(r.k)), code: String(r.k), v: num(r.v) })), num((await sql(`SELECT COUNT(DISTINCT blob8) AS uv ${base(site, win(w))}`))[0]?.uv));
   return rows.map((r) => ({ k: String(r.k), v: num(r.v) }));
 }
 
