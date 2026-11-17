@@ -1,6 +1,8 @@
 // Reads the dashboard numbers from Analytics Engine through its SQL API.
 // Free plan: 10,000 SQL reads a day, so every answer is cached (Cache API, free) and one page load asks for everything at once.
 
+import { suggestLanguages } from './languages.js';
+
 const DATASET = 'flisk_analytics';
 export const RANGES = { today: { n: 1, step: 'HOUR', ttl: 60 }, '7d': { n: 7, step: 'DAY', ttl: 300 }, '30d': { n: 30, step: 'DAY', ttl: 600 }, '12m': { n: 365, step: 'WEEK', ttl: 3600 } };
 export const PANELS = {
@@ -10,6 +12,8 @@ export const PANELS = {
 };
 // Link clicks are their own data points (blob14 = 'click'); everything else counts pageviews only (blob14 = '').
 const KIND = { links: 'click' };
+// `languages` has no column of its own: it is worked out from the countries and the pages.
+export const DERIVED = ['languages'];
 export const DEFAULT_PANELS = ['channels', 'pages', 'countries', 'browsers'];
 const SITE_RE = /^[a-z0-9]([a-z0-9.-]{0,98}[a-z0-9])?$/;
 export const validDomain = (d) => SITE_RE.test(String(d || '')) && d.includes('.');
@@ -89,11 +93,10 @@ export function fillSeries(rows, range, now = Date.now()) {
 
 async function overview(env, site, w, sql) {
   const { step } = w;
-  const [cur, prev, series, live, sess] = await Promise.all([
+  const [cur, prev, series, sess] = await Promise.all([
     sql(`SELECT SUM(_sample_interval) AS pv, COUNT(DISTINCT blob8) AS uv, COUNT(DISTINCT blob9) AS visits ${base(site, win(w))}`),
     sql(`SELECT SUM(_sample_interval) AS pv, COUNT(DISTINCT blob8) AS uv, COUNT(DISTINCT blob9) AS visits ${base(site, win(w, true))}`),
     sql(`SELECT toStartOfInterval(timestamp, INTERVAL '1' ${step}) AS t, COUNT(DISTINCT blob8) AS v, SUM(_sample_interval) AS pv, COUNT(DISTINCT blob9) AS vs ${base(site, win(w))} GROUP BY t ORDER BY t`),
-    sql(`SELECT COUNT(DISTINCT blob8) AS v ${base(site, "timestamp > NOW() - INTERVAL '5' MINUTE")}`),
     // Bounce and duration need a subquery. If Analytics Engine refuses it these two show a dash instead of failing the page.
     sql(`SELECT COUNT() AS sessions, SUM(IF(pv = 1, 1, 0)) AS bounces, AVG(dur) AS dur FROM (SELECT blob9 AS sid, SUM(_sample_interval) AS pv, toUnixTimestamp(MAX(timestamp)) - toUnixTimestamp(MIN(timestamp)) AS dur ${base(site, win(w))} GROUP BY sid)`).catch(() => null),
   ]);
@@ -103,10 +106,17 @@ async function overview(env, site, w, sql) {
     return { visitors: num(x.uv), visits, pageviews: pv, viewsPerVisit: visits ? +(pv / visits).toFixed(2) : 0,
       bounceRate: s && num(s.sessions) ? Math.round((num(s.bounces) / num(s.sessions)) * 100) : null, duration: s ? Math.round(num(s.dur)) : null };
   };
-  return { current: metrics(a, sess?.[0]), previous: metrics(p, null), step: step.toLowerCase(), from: w.from ?? null, to: w.to ?? null, series: fillBuckets(series, step, w.count, w.end), live: num(live[0]?.v) };
+  return { current: metrics(a, sess?.[0]), previous: metrics(p, null), step: step.toLowerCase(), from: w.from ?? null, to: w.to ?? null, series: fillBuckets(series, step, w.count, w.end) };
+}
+
+async function languages(site, w, sql) {
+  const top = (col, limit) => sql(`SELECT ${col} AS k, COUNT(DISTINCT blob8) AS v ${base(site, win(w))} AND ${col} != '' GROUP BY k ORDER BY v DESC LIMIT ${limit}`).then((r) => r.map((x) => ({ k: String(x.k), v: num(x.v) })));
+  const [countries, pages] = await Promise.all([top('blob4', 100), top('blob1', 300)]);
+  return suggestLanguages(countries, pages);
 }
 
 async function panel(env, site, w, key, sql) {
+  if (key === 'languages') return languages(site, w, sql);
   const col = PANELS[key], kind = KIND[key] || '';
   const agg = kind ? 'SUM(_sample_interval)' : 'COUNT(DISTINCT blob8)';
   const rows = await sql(`SELECT ${col} AS k, ${agg} AS v ${base(site, win(w), kind)} AND ${col} != '' GROUP BY k ORDER BY v DESC LIMIT 10`);
@@ -139,8 +149,13 @@ export async function siteStats(env, site, range, parts, { sql = (q) => runSql(e
   if (!validDomain(site)) return null;
   const w = resolveWindow({ range, from, to, by });
   if (!w) return null;
-  const want = [...new Set(parts.filter((p) => PANELS[p]))];
-  const out = { site, range: w.from != null ? 'custom' : range, ...(await cached(cache, `${site}/${w.key}/overview`, w.ttl, () => overview(env, site, w, sql))), panels: {} };
+  const want = [...new Set(parts.filter((p) => PANELS[p] || DERIVED.includes(p)))];
+  // "Current visitors" is cached for 15 seconds, not for the window's TTL, or it shows 0 for ten minutes after you open the site.
+  const [main, live] = await Promise.all([
+    cached(cache, `${site}/${w.key}/overview`, w.ttl, () => overview(env, site, w, sql)),
+    cached(cache, `${site}/live`, 15, async () => num((await sql(`SELECT COUNT(DISTINCT blob8) AS v ${base(site, "timestamp > NOW() - INTERVAL '5' MINUTE")}`))[0]?.v)),
+  ]);
+  const out = { site, range: w.from != null ? 'custom' : range, ...main, live, panels: {} };
   await Promise.all(want.map(async (p) => { out.panels[p] = await cached(cache, `${site}/${w.key}/${p}`, w.ttl, () => panel(env, site, w, p, sql)); }));
   return out;
 }
