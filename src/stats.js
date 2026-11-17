@@ -1,6 +1,8 @@
 // Reads the dashboard numbers from Analytics Engine through its SQL API.
 // Free plan: 10,000 SQL reads a day, so every answer is cached (Cache API, free) and one page load asks for everything at once.
 
+import { suggestLanguages } from './languages.js';
+
 const DATASET = 'flisk_analytics';
 export const RANGES = { today: { n: 1, step: 'HOUR', ttl: 60 }, '7d': { n: 7, step: 'DAY', ttl: 300 }, '30d': { n: 30, step: 'DAY', ttl: 600 }, '12m': { n: 365, step: 'WEEK', ttl: 3600 } };
 export const PANELS = {
@@ -8,6 +10,8 @@ export const PANELS = {
   countries: 'blob4', regions: 'blob11', cities: 'blob12',
   browsers: 'blob5', os: 'blob6', devices: 'blob7',
 };
+// `languages` has no column of its own: it is worked out from the countries and the pages.
+export const DERIVED = ['languages'];
 export const DEFAULT_PANELS = ['channels', 'pages', 'countries', 'browsers'];
 const SITE_RE = /^[a-z0-9]([a-z0-9.-]{0,98}[a-z0-9])?$/;
 export const validDomain = (d) => SITE_RE.test(String(d || '')) && d.includes('.');
@@ -68,9 +72,17 @@ async function overview(env, site, range, sql) {
 }
 
 async function panel(env, site, range, key, sql) {
+  if (key === 'languages') return languages(site, range, sql);
   const col = PANELS[key], { n } = RANGES[range];
   const rows = await sql(`SELECT ${col} AS k, COUNT(DISTINCT blob8) AS v ${base(site, win(n))} AND ${col} != '' GROUP BY k ORDER BY v DESC LIMIT 10`);
   return rows.map((r) => ({ k: String(r.k), v: num(r.v) }));
+}
+
+async function languages(site, range, sql) {
+  const { n } = RANGES[range];
+  const top = (col, limit) => sql(`SELECT ${col} AS k, COUNT(DISTINCT blob8) AS v ${base(site, win(n))} AND ${col} != '' GROUP BY k ORDER BY v DESC LIMIT ${limit}`).then((r) => r.map((x) => ({ k: String(x.k), v: num(x.v) })));
+  const [countries, pages] = await Promise.all([top('blob4', 100), top('blob1', 300)]);
+  return suggestLanguages(countries, pages);
 }
 
 // Each piece (the overview, then every panel) is cached on its own, so opening another tab costs one query, not seven.
@@ -87,7 +99,7 @@ async function cached(cache, name, ttl, make) {
 export async function siteStats(env, site, range, parts, { sql = (q) => runSql(env, q), cache = globalThis.caches?.default } = {}) {
   if (!validDomain(site) || !RANGES[range]) return null;
   const { ttl } = RANGES[range];
-  const want = [...new Set(parts.filter((p) => PANELS[p]))];
+  const want = [...new Set(parts.filter((p) => PANELS[p] || DERIVED.includes(p)))];
   const out = { site, range, ...(await cached(cache, `${site}/${range}/overview`, ttl, () => overview(env, site, range, sql))), panels: {} };
   await Promise.all(want.map(async (p) => { out.panels[p] = await cached(cache, `${site}/${range}/${p}`, ttl, () => panel(env, site, range, p, sql)); }));
   return out;
