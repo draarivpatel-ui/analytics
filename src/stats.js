@@ -1,7 +1,7 @@
 // Reads the dashboard numbers from Analytics Engine through its SQL API.
 // Free plan: 10,000 SQL reads a day, so every answer is cached (Cache API, free) and one page load asks for everything at once.
 
-import { nameOf, suggestLanguages } from './languages.js';
+import { languagesToAdd, nameOf, suggestLanguages } from './languages.js';
 
 const DATASET = 'flisk_analytics';
 export const RANGES = { today: { n: 1, step: 'HOUR', ttl: 60 }, '7d': { n: 7, step: 'DAY', ttl: 300 }, '30d': { n: 30, step: 'DAY', ttl: 600 }, '12m': { n: 365, step: 'WEEK', ttl: 3600 } };
@@ -169,7 +169,14 @@ export async function sitesOverview(env, domains, { sql = (q) => runSql(env, q),
   const list = domains.filter(validDomain).sort();
   if (!list.length) return [];
   return cached(cache, `sites/${list.join(',')}`, 300, async () => {
-    const rows = await sql(`SELECT index1 AS site, toStartOfInterval(timestamp, INTERVAL '1' DAY) AS t, COUNT(DISTINCT blob8) AS v, MAX(timestamp) AS last FROM ${DATASET} WHERE index1 IN (${list.map((d) => `'${d}'`).join(',')}) AND timestamp > NOW() - INTERVAL '60' DAY GROUP BY site, t ORDER BY t`);
+    const sites = list.map((d) => `'${d}'`).join(',');
+    const [rows, langRows, pathRows] = await Promise.all([
+      sql(`SELECT index1 AS site, toStartOfInterval(timestamp, INTERVAL '1' DAY) AS t, COUNT(DISTINCT blob8) AS v, MAX(timestamp) AS last FROM ${DATASET} WHERE index1 IN (${sites}) AND timestamp > NOW() - INTERVAL '60' DAY GROUP BY site, t ORDER BY t`),
+      // The languages are extra: if these two fail the cards still show without them.
+      sql(`SELECT index1 AS site, blob16 AS k, COUNT(DISTINCT blob8) AS v FROM ${DATASET} WHERE index1 IN (${sites}) AND blob14 = '' AND blob16 != '' AND timestamp > NOW() - INTERVAL '30' DAY GROUP BY site, k ORDER BY v DESC LIMIT 500`).catch(() => []),
+      sql(`SELECT index1 AS site, blob1 AS k FROM ${DATASET} WHERE index1 IN (${sites}) AND blob14 = '' AND blob1 LIKE '/__/%' AND timestamp > NOW() - INTERVAL '30' DAY GROUP BY site, k LIMIT 500`).catch(() => []),
+    ]);
+    const toAdd = languagesToAdd(langRows, pathRows);
     // The newest data point per site puts the most recently visited site first.
     const lastOf = (rows_) => rows_.reduce((m, r) => { const t = r.last ? Date.parse(`${String(r.last).slice(0, 19).replace(' ', 'T')}Z`) : 0; return Number.isFinite(t) && t > m ? t : m; }, 0);
     const now = Date.now();
@@ -179,7 +186,7 @@ export async function sitesOverview(env, domains, { sql = (q) => runSql(env, q),
       const cutoff = now - 30 * 86400e3;
       const before = mine.filter((r) => Date.parse(`${String(r.t).slice(0, 19).replace(' ', 'T')}Z`) <= cutoff).reduce((s, r) => s + num(r.v), 0);
       const total = days.reduce((s, v) => s + v, 0);
-      return { domain, total, previous: before, change: before ? Math.round(((total - before) / before) * 100) : null, days, last: lastOf(mine) };
+      return { domain, total, previous: before, change: before ? Math.round(((total - before) / before) * 100) : null, days, last: lastOf(mine), add: toAdd.get(domain) || [] };
     });
     // Most recently visited first; sites with no visits keep their alphabetical order at the end.
     return out.sort((a, b) => b.last - a.last);

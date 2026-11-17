@@ -44,3 +44,27 @@ export function suggestLanguages(countries, pages) {
     .map(([lang, e]) => ({ k: nameOf(lang), v: Math.max(e.country, e.domain), n: [...new Set(e.notes)].slice(0, 2).join(', ') }))
     .sort((a, b) => b.v - a.v || a.k.localeCompare(b.k)).slice(0, 10);
 }
+
+// A flag to show next to a language. A language is not a country, so this is the country most people think of; English is the baseline and has none.
+const FLAG_BY_LANG = { ko: 'KR', ja: 'JP', zh: 'CN', de: 'DE', fr: 'FR', es: 'ES', it: 'IT', pt: 'PT', nl: 'NL', pl: 'PL', tr: 'TR', ru: 'RU', uk: 'UA', sv: 'SE', no: 'NO', nb: 'NO', da: 'DK', fi: 'FI', cs: 'CZ', sk: 'SK', el: 'GR', hu: 'HU', ro: 'RO', bg: 'BG', hr: 'HR', sr: 'RS', lt: 'LT', lv: 'LV', et: 'EE', he: 'IL', ar: 'SA', fa: 'IR', th: 'TH', vi: 'VN', id: 'ID', ms: 'MY', fil: 'PH', hi: 'IN', sl: 'SI', bn: 'BD', ur: 'PK', ta: 'IN' };
+export const flagOf = (lang) => { const c = FLAG_BY_LANG[lang]; return c ? String.fromCodePoint(...[...c].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65)) : '🌐'; };
+
+// Languages a site could add: what its visitors' browsers ask for (blob16 rows: {site, k, v}), without English
+// and without a language the site already serves under /xx/ (paths: {site, k}). Top `max` per site, most visitors first.
+export function languagesToAdd(langRows, pathRows, max = 3) {
+  const served = new Map();
+  for (const { site, k } of pathRows) {
+    const m = SERVED_RE.exec(String(k));
+    if (m) { const set = served.get(site) || new Set(); set.add(m[1].toLowerCase()); served.set(site, set); }
+  }
+  const out = new Map();
+  for (const r of langRows) {
+    const code = String(r.k || '').toLowerCase(), v = Number(r.v) || 0;
+    if (!code || code === 'en' || served.get(r.site)?.has(code)) continue;
+    const list = out.get(r.site) || [];
+    list.push({ code, name: nameOf(code), flag: flagOf(code), v });
+    out.set(r.site, list);
+  }
+  for (const [site, list] of out) out.set(site, list.sort((a, b) => b.v - a.v || a.code.localeCompare(b.code)).slice(0, max));
+  return out;
+}
