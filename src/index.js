@@ -1,7 +1,7 @@
 import { allowed, githubAuthorizeUrl, githubLogin } from './auth.js';
 import { clearSession, makeSession, readSession, sameOrigin } from './session.js';
 import { CORS, handleBeacon } from './ingest.js';
-import { DEFAULT_PANELS, siteStats, sitesOverview, validDomain } from './stats.js';
+import { DEFAULT_PANELS, siteLogs, siteStats, sitesOverview, validDomain } from './stats.js';
 import { dashboardPage, installPage, loginPage, messagePage, newSitePage, sitesPage, tokensPage } from './ui.js';
 import { addSite, cleanDomain, listDomains, ownerOf } from './sites.js';
 import { bearerLogin, createToken, listTokens, revokeToken } from './tokens.js';
@@ -126,10 +126,20 @@ async function route(request, env) {
     if (!validDomain(site) || (await ownerOf(env, site)) !== login) return json(404, { error: 'site not found' });
     const parts = (url.searchParams.get('parts') ?? DEFAULT_PANELS.join(',')).split(',').filter(Boolean);
     try {
-      const out = await siteStats(env, site, url.searchParams.get('range') || '30d', parts);
+      const q = url.searchParams;
+      const out = await siteStats(env, site, q.get('range') || '30d', parts, { from: q.get('from') ?? undefined, to: q.get('to') ?? undefined, by: q.get('by') ?? undefined });
       return out ? json(200, out) : json(400, { error: 'bad range' });
     } catch {
       return json(502, { error: 'stats unavailable' });
+    }
+  }
+  if (path === '/api/logs' && method === 'GET') {
+    const site = url.searchParams.get('site') || '';
+    if (!validDomain(site) || (await ownerOf(env, site)) !== login) return json(404, { error: 'site not found' });
+    try {
+      return json(200, { site, events: await siteLogs(env, site, { limit: url.searchParams.get('limit') || 50, kind: url.searchParams.get('kind') || '' }) });
+    } catch {
+      return json(502, { error: 'logs unavailable' });
     }
   }
   return html(messagePage('Not found', 'There is nothing at this address.', login), 404);

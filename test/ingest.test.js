@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from 'bun:test';
-import { classifySource, handleBeacon, isBot, parseUa, resetSitesCache, underCap, visitorHash } from '../src/ingest.js';
+import { classifySource, cleanLink, handleBeacon, isBot, parseUa, resetSitesCache, underCap, visitorHash } from '../src/ingest.js';
 import { beacon, fakeCache, fakeEnv, UA } from './helpers.js';
 
 beforeEach(() => resetSitesCache());
@@ -109,4 +109,19 @@ test('a.js sends the theme: data-flisk-theme, else data-theme, never light or da
   expect(run({})).toBe('');
   expect(run({ 'data-flisk-theme': ' Cool Glow! ' })).toBe('coolglow');
   expect(run({ 'data-flisk-theme': 'a'.repeat(40) })).toHaveLength(32);
+});
+
+test('a link click writes one data point with kind click and a cleaned target; junk targets write nothing', async () => {
+  const env = fakeEnv();
+  const ok = await handleBeacon(beacon({ d: 'flisk.sh', p: '/docs/', e: 'click', l: 'https://x.com/flisk_sh/?a=1#b', s: 'abc' }), env);
+  expect(ok.status).toBe(204);
+  expect(env.points).toHaveLength(1);
+  expect(env.points[0].blobs[13]).toBe('click');
+  expect(env.points[0].blobs[14]).toBe('x.com/flisk_sh');
+  for (const l of ['', 'javascript:alert(1)', 'mailto:a@b.c']) await handleBeacon(beacon({ d: 'flisk.sh', p: '/', e: 'click', l }), env);
+  expect(env.points).toHaveLength(1);
+  const pv = fakeEnv();
+  await handleBeacon(beacon({ d: 'flisk.sh', p: '/' }), pv);
+  expect(pv.points[0].blobs[13]).toBe('');
+  expect(cleanLink('https://a.b/' + 'x'.repeat(300)).length).toBeLessThanOrEqual(120);
 });
