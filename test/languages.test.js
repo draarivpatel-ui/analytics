@@ -28,3 +28,10 @@ test('current visitors comes from its own query, not from the range overview', a
   expect(out.live).toBe(3);
   expect(seen.filter((q) => q.includes("INTERVAL '5' MINUTE"))).toHaveLength(1);
 });
+
+test('the sites list puts the most recently visited site first', async () => {
+  const { sitesOverview } = await import('../src/stats.js');
+  const sql = async () => ([{ site: 'a.example.com', t: '2026-11-10 00:00:00', v: '1', last: '2026-11-10 10:00:00' }, { site: 'b.example.com', t: '2026-11-18 00:00:00', v: '1', last: '2026-11-18 09:00:00' }]);
+  const out = await sitesOverview({}, ['a.example.com', 'b.example.com', 'c.example.com'], { sql, cache: cache() });
+  expect(out.map((s) => s.domain)).toEqual(['b.example.com', 'a.example.com', 'c.example.com']);
+});
