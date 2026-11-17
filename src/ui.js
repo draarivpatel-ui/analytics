@@ -19,7 +19,7 @@ function shell(login, active, inner) {
 
 export function loginPage(error = '') {
   const side = '<aside class="lside"><div class="big">0</div><div class="m">Cookies set on your visitors</div><div><div class="li"><b>01</b><span>No cookies, no consent banner</span></div><div class="li"><b>02</b><span>One script tag, under 1 KB</span></div><div class="li"><b>03</b><span>Same GitHub login as chat, fleet, inference</span></div></div></aside>';
-  const note = error ? `<p style="color:var(--dn)">${esc(error)}</p>` : '<p>One login for chat, fleet, inference and analytics. We only read your GitHub name.</p>';
+  const note = error ? `<p style="color:var(--dn)">${esc(error)}</p>` : '<p>Sign in with GitHub to see your visitors. One login works across all Flisk sites, and we only read your GitHub name.</p>';
   return layout('Sign in · Flisk Analytics', `<div class="frame"><main class="login"><div class="lc">${LOGO}<h1>Know who comes to your site.</h1>${note}<a class="gbtn" href="/auth/login">${GH}Continue with GitHub</a><small>Visitors are counted without cookies.</small></div>${side}</main></div>`);
 }
 
