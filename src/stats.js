@@ -165,15 +165,19 @@ export async function sitesOverview(env, domains, { sql = (q) => runSql(env, q),
   const list = domains.filter(validDomain).sort();
   if (!list.length) return [];
   return cached(cache, `sites/${list.join(',')}`, 300, async () => {
-    const rows = await sql(`SELECT index1 AS site, toStartOfInterval(timestamp, INTERVAL '1' DAY) AS t, COUNT(DISTINCT blob8) AS v FROM ${DATASET} WHERE index1 IN (${list.map((d) => `'${d}'`).join(',')}) AND timestamp > NOW() - INTERVAL '60' DAY GROUP BY site, t ORDER BY t`);
+    const rows = await sql(`SELECT index1 AS site, toStartOfInterval(timestamp, INTERVAL '1' DAY) AS t, COUNT(DISTINCT blob8) AS v, MAX(timestamp) AS last FROM ${DATASET} WHERE index1 IN (${list.map((d) => `'${d}'`).join(',')}) AND timestamp > NOW() - INTERVAL '60' DAY GROUP BY site, t ORDER BY t`);
+    // The newest data point per site puts the most recently visited site first.
+    const lastOf = (rows_) => rows_.reduce((m, r) => { const t = r.last ? Date.parse(`${String(r.last).slice(0, 19).replace(' ', 'T')}Z`) : 0; return Number.isFinite(t) && t > m ? t : m; }, 0);
     const now = Date.now();
-    return list.map((domain) => {
+    const out = list.map((domain) => {
       const mine = rows.filter((r) => r.site === domain);
       const days = fillSeries(mine, '30d', now).map((d) => d.v);
       const cutoff = now - 30 * 86400e3;
       const before = mine.filter((r) => Date.parse(`${String(r.t).slice(0, 19).replace(' ', 'T')}Z`) <= cutoff).reduce((s, r) => s + num(r.v), 0);
       const total = days.reduce((s, v) => s + v, 0);
-      return { domain, total, previous: before, change: before ? Math.round(((total - before) / before) * 100) : null, days };
+      return { domain, total, previous: before, change: before ? Math.round(((total - before) / before) * 100) : null, days, last: lastOf(mine) };
     });
+    // Most recently visited first; sites with no visits keep their alphabetical order at the end.
+    return out.sort((a, b) => b.last - a.last);
   });
 }
