@@ -77,7 +77,10 @@ test('the dashboard and install pages render for an owned site, with the right s
   const dash = await as(env, 'odykyi', '/site/flisk.sh');
   expect(dash.status).toBe(200);
   expect(dash.headers.get('content-security-policy')).toContain("connect-src 'self'");
-  expect(await dash.text()).toContain('"flisk.sh"');
+  const page = await dash.text();
+  expect(page).toContain('"flisk.sh"');
+  expect(page).toContain('href="https://flisk.sh"');
+  expect(page).toContain('src="https://flisk.sh/favicon.ico"');
   const inst = await (await as(env, 'odykyi', '/site/flisk.sh/install')).text();
   expect(inst).toContain('data-domain=&quot;flisk.sh&quot; src=&quot;https://flisk.sh/a.js&quot;');
   expect(inst).toContain('curl -fsSL https://flisk.sh/install/jekyll | sh -s -- flisk.sh');
