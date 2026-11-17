@@ -20,3 +20,11 @@ test('the languages panel is built from the countries and the pages', async () =
   const out = await siteStats({}, 'citable.flisk.si', '30d', ['languages'], { sql, cache: cache() });
   expect(out.panels.languages).toEqual([{ k: 'Japanese', v: 2, n: '.jp domain scanned, visitors from Japan' }]);
 });
+
+test('current visitors comes from its own query, not from the range overview', async () => {
+  const seen = [];
+  const sql = async (q) => { seen.push(q); return q.includes("INTERVAL '5' MINUTE") ? [{ v: '3' }] : q.includes('GROUP BY t') || q.includes('FROM (SELECT') ? [] : [{ pv: '1', uv: '1', visits: '1' }]; };
+  const out = await siteStats({}, 'citable.flisk.si', '30d', [], { sql, cache: cache() });
+  expect(out.live).toBe(3);
+  expect(seen.filter((q) => q.includes("INTERVAL '5' MINUTE"))).toHaveLength(1);
+});
