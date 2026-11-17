@@ -54,12 +54,12 @@ test('a domain that could break out of the SQL string is refused before any quer
   expect(asked).toBe(0);
 });
 
-test('the sites page asks for every site in one query', async () => {
+test('the sites page asks for every site at once: one query each for visits, languages and served paths', async () => {
   const now = Date.now();
   let n = 0;
   const sql = async () => { n++; return [{ site: 'flisk.sh', t: day(0, now), v: '4' }, { site: 'flisk.sh', t: day(45, now), v: '2' }]; };
   const out = await sitesOverview({}, ['flisk.sh', 'chat.flisk.si'], { sql, cache: fakeCache() });
-  expect(n).toBe(1);
+  expect(n).toBe(3); // not one per site
   expect(out.find((s) => s.domain === 'flisk.sh')).toMatchObject({ total: 4, previous: 2, change: 100 });
   expect(out.find((s) => s.domain === 'chat.flisk.si')).toMatchObject({ total: 0, change: null });
   expect(out[0].days).toHaveLength(30);

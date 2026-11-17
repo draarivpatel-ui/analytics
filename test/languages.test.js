@@ -48,3 +48,25 @@ test('the visitor languages panel counts visitors per browser language with thei
   expect(out.panels.visitorlangs).toEqual([{ k: 'Dutch', code: 'nl', v: 6, n: '60%' }, { k: 'German', code: 'de', v: 2, n: '20%' }]);
   expect(seen.find((q) => q.includes('blob16 AS k'))).toContain("blob16 != ''");
 });
+
+test('each site card lists the languages to add: visitor languages without English and without what the site already serves', async () => {
+  const { languagesToAdd, flagOf } = await import('../src/languages.js');
+  const langs = [{ site: 'fleet.flisk.si', k: 'nl', v: '9' }, { site: 'fleet.flisk.si', k: 'en', v: '50' }, { site: 'flisk.si', k: 'de', v: '4' }, { site: 'flisk.si', k: 'nl', v: '7' }, { site: 'pages.flisk.si', k: 'hi', v: '3' }];
+  const paths = [{ site: 'fleet.flisk.si', k: '/nl/docs/' }];
+  const out = languagesToAdd(langs, paths);
+  expect(out.has('fleet.flisk.si')).toBe(false); // Dutch is already served, English is the baseline
+  expect(out.get('flisk.si').map((l) => l.code)).toEqual(['nl', 'de']);
+  expect(out.get('pages.flisk.si')).toEqual([{ code: 'hi', name: 'Hindi', flag: '🇮🇳', v: 3 }]);
+  expect(flagOf('nl')).toBe('🇳🇱');
+});
+
+test('the sites list carries the languages to add and survives a failing language query', async () => {
+  const { sitesOverview } = await import('../src/stats.js');
+  const sql = async (q) => {
+    if (q.includes('blob16 AS k')) return [{ site: 'flisk.si', k: 'de', v: '4' }];
+    if (q.includes("LIKE '/__/%'")) throw new Error('nope');
+    return [];
+  };
+  const out = await sitesOverview({}, ['flisk.si'], { sql, cache: cache() });
+  expect(out[0].add.map((l) => l.code)).toEqual(['de']);
+});
