@@ -35,3 +35,16 @@ test('the sites list puts the most recently visited site first', async () => {
   const out = await sitesOverview({}, ['a.example.com', 'b.example.com', 'c.example.com'], { sql, cache: cache() });
   expect(out.map((s) => s.domain)).toEqual(['b.example.com', 'a.example.com', 'c.example.com']);
 });
+
+test('the visitor languages panel counts visitors per browser language with their share', async () => {
+  const seen = [];
+  const sql = async (q) => {
+    seen.push(q);
+    if (q.includes('blob16 AS k')) return [{ k: 'nl', v: '6' }, { k: 'de', v: '2' }];
+    if (q.includes('GROUP BY t') || q.includes('FROM (SELECT')) return [];
+    return [{ pv: '10', uv: '10', visits: '10' }];
+  };
+  const out = await siteStats({}, 'fleet.flisk.si', '30d', ['visitorlangs'], { sql, cache: cache() });
+  expect(out.panels.visitorlangs).toEqual([{ k: 'Dutch', code: 'nl', v: 6, n: '60%' }, { k: 'German', code: 'de', v: 2, n: '20%' }]);
+  expect(seen.find((q) => q.includes('blob16 AS k'))).toContain("blob16 != ''");
+});

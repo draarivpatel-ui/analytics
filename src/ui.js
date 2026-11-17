@@ -54,8 +54,8 @@ export function newSitePage(login, error = '') {
 
 const DASH_JS = `
 var SITE=window.__SITE,Q=new URLSearchParams(location.search),range=Q.get('r')||'30d',from=+Q.get('from')||0,to=+Q.get('to')||0,by=Q.get('by')||'',metric='v',data={},tabState={},cur=null,logs=[],logKind='';
-var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns'],['Themes','themes']]},{tabs:[['Top pages','pages'],['Link clicks','links']]},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities'],['Add a language','languages']]},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']]}];
-var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',themes:'Theme',pages:'Page',links:'Link',countries:'Country',regions:'Region',cities:'City',languages:'Language',browsers:'Browser',os:'Operating system',devices:'Device'};
+var DEFS=[{tabs:[['Channels','channels'],['Sources','sources'],['Campaigns','campaigns'],['Themes','themes']]},{tabs:[['Top pages','pages'],['Link clicks','links']]},{tabs:[['Countries','countries'],['Regions','regions'],['Cities','cities'],['Visitor languages','visitorlangs'],['Add a language','languages']]},{tabs:[['Browsers','browsers'],['Operating systems','os'],['Devices','devices']]}];
+var HEAD={channels:'Channel',sources:'Source',campaigns:'Campaign',themes:'Theme',pages:'Page',links:'Link',countries:'Country',regions:'Region',cities:'City',visitorlangs:'Language',languages:'Language',browsers:'Browser',os:'Operating system',devices:'Device'};
 var ML={v:'Visitors',vs:'Visits',pv:'Pageviews'},STEP_MS={hour:3600000,day:86400000,week:604800000},geo={};
 function fmt(n){return n==null?'—':n.toLocaleString('en-US')}
 function dur(s){if(s==null)return '—';var m=Math.floor(s/60);return m?m+'m '+(s%60)+'s':s+'s'}

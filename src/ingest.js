@@ -1,7 +1,7 @@
 // The pageview beacon: one request in, one Analytics Engine data point out. Nothing else is stored.
 // No cookie, no IP kept. A visitor is a hash of (secret, day, site, ip, user agent) that changes every day.
 
-export const BLOBS = ['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city', 'theme', 'kind', 'target'];
+export const BLOBS = ['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city', 'theme', 'kind', 'target', 'language'];
 
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|curl|wget|python|node-fetch|axios|go-http|java\/|monitor|uptime|pingdom|phantom|puppeteer|playwright/i;
 export const isBot = (ua) => !ua || BOT.test(ua);
@@ -44,6 +44,12 @@ export const cleanTheme = (t) => { const s = String(t ?? '').trim().toLowerCase(
 export function cleanLink(l) {
   if (/^(javascript|mailto|tel|sms|data|file|ftp|blob):/i.test(String(l ?? '').trim())) return '';
   try { const u = new URL(String(l ?? '').includes('://') ? String(l) : `https://${l}`); return /^https?:$/.test(u.protocol) && u.host ? clip(u.host + u.pathname.replace(/\/$/, ''), 120) : ''; } catch { return ''; }
+}
+// The visitor's browser language from Accept-Language: the primary subtag of the first tag only ("nl-NL,en;q=0.8" -> "nl").
+// No region, no list of preferences, nothing that tells one visitor from another.
+export function primaryLanguage(header) {
+  const m = /^\s*([a-z]{2,3})(?:[-_][a-z0-9]+)*\s*(?:[;,]|$)/i.exec(String(header ?? ''));
+  return m ? m[1].toLowerCase() : '';
 }
 const cleanPath = (p) => { const s = clip(p, 200); return s.startsWith('/') ? s.split('?')[0].split('#')[0] || '/' : '/'; };
 
@@ -94,7 +100,7 @@ export async function handleBeacon(request, env, now = Date.now()) {
   const { browser, os, device } = parseUa(ua);
   const cf = request.cf || {};
   const ip = request.headers.get('cf-connecting-ip') || '';
-  const blobs = [cleanPath(b.p), clip(source), channel, countryName(cf.country), browser, os, device, await visitorHash(env, site, ip, ua, new Date(now)), clip(b.s, 24), clip(b.u, 60), clip(cf.region, 60), clip(cf.city, 60), cleanTheme(b.t), click ? 'click' : '', target];
+  const blobs = [cleanPath(b.p), clip(source), channel, countryName(cf.country), browser, os, device, await visitorHash(env, site, ip, ua, new Date(now)), clip(b.s, 24), clip(b.u, 60), clip(cf.region, 60), clip(cf.city, 60), cleanTheme(b.t), click ? 'click' : '', target, click ? '' : primaryLanguage(request.headers.get('accept-language'))];
   env.EVENTS.writeDataPoint({ indexes: [site], blobs, doubles: [1] });
   return done();
 }
