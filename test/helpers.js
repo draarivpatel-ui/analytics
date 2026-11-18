@@ -11,7 +11,13 @@ export function fakeEnv(over = {}) {
         all: async () => (/FROM tokens WHERE owner/.test(sql) ? { results: [...tokens].filter(([, t]) => t.owner === args[0]).map(([hash, t]) => ({ hash, label: t.label, created: t.created })) } : { results: /FROM sites WHERE owner/.test(sql) ? [...sites].filter(([, o]) => o === args[0]).map(([domain]) => ({ domain })) : [...sites.keys()].map((domain) => ({ domain })) }),
         first: async () => (/FROM tokens/.test(sql) ? (tokens.has(args[0]) ? { owner: tokens.get(args[0]).owner } : null) : sites.has(args[0]) ? { owner: sites.get(args[0]) } : null),
         run: async () => {
-          if (/INSERT INTO sites/.test(sql)) sites.set(args[0], args[1]);
+          // ON CONFLICT(domain) DO NOTHING: an existing domain keeps its owner, and meta.changes
+          // reports 1 only when a new row was written, mirroring D1/SQLite.
+          if (/INSERT INTO sites/.test(sql)) {
+            const existed = sites.has(args[0]);
+            if (!existed) sites.set(args[0], args[1]);
+            return { meta: { changes: existed ? 0 : 1 } };
+          }
           if (/INSERT INTO tokens/.test(sql)) tokens.set(args[0], { owner: args[1], label: args[2], created: args[3] });
           if (/DELETE FROM tokens/.test(sql)) for (const h of [...tokens.keys()]) if (tokens.get(h).owner === args[0] && h.startsWith(args[1])) tokens.delete(h);
           return {};
