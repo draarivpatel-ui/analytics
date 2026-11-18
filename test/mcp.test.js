@@ -57,6 +57,27 @@ test('an agent cannot read a site that belongs to someone else', async () => {
   expect(r.isError).toBe(true);
 });
 
+test('a stranger cannot claim a site that is already registered, and the owner keeps it', async () => {
+  const env = fakeEnv();
+  env.sites.set('mine.flisk.si', 'odykyi');
+  env.ALLOWED_LOGINS = 'odykyi,intruder';
+  const { token } = await createToken(env, 'intruder', 'a');
+  const r = await call(env, token, 'add_site', { domain: 'https://MINE.flisk.si/' });
+  expect(r.isError).toBe(true);
+  expect(JSON.stringify(r)).toContain('belongs to someone else');
+  // The owner is unchanged: the stranger did not overwrite it.
+  expect(env.sites.get('mine.flisk.si')).toBe('odykyi');
+});
+
+test('re-adding your own site is a no-op, not a new claim', async () => {
+  const env = fakeEnv();
+  env.sites.set('fleet.flisk.si', 'odykyi');
+  const { token } = await createToken(env, 'odykyi', 'a');
+  const r = await call(env, token, 'add_site', { domain: 'fleet.flisk.si' });
+  expect(r.isError).toBeUndefined();
+  expect(env.sites.get('fleet.flisk.si')).toBe('odykyi');
+});
+
 test('the same key opens /api/sites, and a cabinet user can make and revoke keys', async () => {
   const env = fakeEnv();
   const { token } = await createToken(env, 'odykyi', 'a');
