@@ -14,7 +14,7 @@ function client() {
 test('dashboard script parses', () => {
   const html = dashboardPage('alice', 'flisk.sh');
   const js = html.split('<script>').pop().split('</script>')[0];
-  expect(() => new Function(js.replace(/^[\s\S]*?(?=var SITE)/, '').slice(0, 0))).not.toThrow();
+  expect(() => new Function(js)).not.toThrow();
 });
 
 test('top pages rows get an icon that opens the page on the site', () => {
