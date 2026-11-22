@@ -86,6 +86,8 @@ test('the dashboard and install pages render for an owned site, with the right s
   const dash = await as(env, 'odykyi', '/site/flisk.sh');
   expect(dash.status).toBe(200);
   expect(dash.headers.get('content-security-policy')).toContain("connect-src 'self'");
+  // The heatmap shows the site in an iframe; default-src 'none' would block it.
+  expect(dash.headers.get('content-security-policy')).toMatch(/frame-src https:/);
   const page = await dash.text();
   expect(page).toContain('"flisk.sh"');
   expect(page).toContain('href="https://flisk.sh"');
