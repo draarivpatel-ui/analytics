@@ -24,7 +24,8 @@ export async function runSql(env, sql, fetchImpl = fetch) {
     headers: { authorization: `Bearer ${env.CF_API_TOKEN}`, 'content-type': 'text/plain' },
     body: sql,
   });
-  if (!res.ok) throw new Error(`sql ${res.status}`);
+  // Keep the first part of the answer: Analytics Engine says what is wrong with a query there.
+  if (!res.ok) throw new Error(`sql ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
   const j = await res.json();
   return j.data || [];
 }
