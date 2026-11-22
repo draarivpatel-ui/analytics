@@ -36,7 +36,8 @@ export const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/5
 export const beacon = (body, headers = {}) => new Request('https://analytics.flisk.si/e', { method: 'POST', headers: { 'user-agent': UA, origin: 'https://flisk.sh', 'cf-connecting-ip': '203.0.113.9', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
 
 // A D1 stand-in on Bun's SQLite with the real schema.sql, for tests that need the SQL to actually run.
-export function sqliteD1(sites = { 'flisk.sh': 'odykyi', 'chat.flisk.si': 'odykyi', 'theirs.example': 'someone' }) {
+const D1_SITES = { 'flisk.sh': 'odykyi', 'chat.flisk.si': 'odykyi', 'theirs.example': 'someone' };
+export function sqliteD1(sites = D1_SITES) {
   const { Database } = require('bun:sqlite');
   const db = new Database(':memory:');
   db.exec(require('node:fs').readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
