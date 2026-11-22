@@ -24,7 +24,7 @@ Cookieless web analytics for the Flisk sites, using a Cloudflare Worker and Anal
 - [Sign in](${home}): GitHub sign-in is limited to allowed logins; dashboards and site data are private.
 - [Source and setup](https://github.com/flisk-sh/analytics): tracker installation and local development.
 - MCP: ${home}mcp. Requires Authorization: Bearer <key>, made in the signed-in cabinet at /tokens.
-- Authenticated tools: list_sites, add_site, install_snippet, site_stats. The same key works on /api/sites and /api/stats.
+- Authenticated tools: list_sites, add_site, install_snippet, site_stats. The same key works on /api/sites, /api/stats and /api/clicks.
 `,
     '/robots.txt': `User-agent: *
 Disallow: /
