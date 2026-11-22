@@ -120,11 +120,11 @@ test('GET /api/clicks works with an API key (what gel click-map sends)', async (
 
 test('a.js records every click with its place, batches them, and stays quiet under Do Not Track or GPC', async () => {
   const src = await Bun.file(new URL('../public/a.js', import.meta.url)).text();
-  const run = (nav = {}) => {
+  const run = (nav = {}, loc = {}) => {
     const sent = [], on = {};
     const script = { getAttribute: (k) => (k === 'data-domain' ? 'x.flisk.si' : null) };
     const document = { currentScript: script, documentElement: { getAttribute: () => null, scrollWidth: 1000 }, referrer: '', visibilityState: 'visible', addEventListener() {} };
-    const g = { document, navigator: { userAgent: 'Chrome', sendBeacon: (_u, b) => { sent.push(JSON.parse(b)); return true; }, ...nav }, location: { pathname: '/', search: '', href: 'https://x.flisk.si/', host: 'x.flisk.si' }, history: {}, sessionStorage: { getItem: () => 'sid', setItem() {} }, addEventListener: (k, f) => { (on[k] ||= []).push(f); }, innerWidth: 400, URL, URLSearchParams, setTimeout, JSON, String, Math, RegExp };
+    const g = { document, navigator: { userAgent: 'Chrome', sendBeacon: (_u, b) => { sent.push(JSON.parse(b)); return true; }, ...nav }, location: { pathname: '/', search: '', href: 'https://x.flisk.si/', host: 'x.flisk.si', ...loc }, history: {}, sessionStorage: { getItem: () => 'sid', setItem() {} }, addEventListener: (k, f) => { (on[k] ||= []).push(f); }, innerWidth: 400, URL, URLSearchParams, setTimeout, JSON, String, Math, RegExp };
     new Function(...Object.keys(g), src)(...Object.values(g));
     const click = (target, pageX, pageY) => on.click.forEach((f) => f({ target, pageX, pageY }));
     return { sent, on, click };
@@ -151,4 +151,8 @@ test('a.js records every click with its place, batches them, and stays quiet und
     q.click(div, 1, 1); q.on.pagehide?.forEach((f) => f());
     expect(q.sent).toHaveLength(1);
   }
+  // The heatmap's preview frame (#flisk-preview) is not a visit: no pageview, no click listener.
+  const p = run({}, { hash: '#flisk-preview' });
+  expect(p.sent).toHaveLength(0);
+  expect(p.on.click).toBeUndefined();
 });
