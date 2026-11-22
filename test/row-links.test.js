@@ -42,9 +42,11 @@ test('dashboard has a click heatmap that reads /api/clicks', () => {
   expect(html).toContain('id="heat"');
   const js = html.split('<script>').pop().split('</script>')[0];
   expect(js).toContain('/api/clicks?site=');
-  const make = new Function('SITE', `function fmt(n){return String(n)}function esc(s){return String(s)}var data={},hm={};${js.slice(js.indexOf('function heatHtml'), js.indexOf('function drawHeat'))};return heatHtml`);
+  const make = new Function('SITE', `function fmt(n){return String(n)}function esc(s){return String(s)}var data={},hm={days:7};${js.slice(js.indexOf('function heatHtml'), js.indexOf('function drawHeat'))};return heatHtml`);
   const out = make('flisk.sh')({ clicks: 3, dead: 1, since: '2026-11-16', cells: [{ x: 10, y: 0, n: 2 }, { x: 50, y: 100, n: 1 }], targets: [{ target: 'Sign up', kind: 'ctl', n: 2 }] }, 'mobile');
   expect(out).toContain('class="hc"');
   expect(out).toContain('Sign up');
-  expect(make('flisk.sh')({ clicks: 0, cells: [], targets: [] }, 'mobile')).toContain('No clicks recorded');
+  expect(out).toContain('role="img"');
+  expect(out).toContain('aria-hidden="true"');
+  expect(make('flisk.sh')({ page: '/', clicks: 0, cells: [], targets: [] }, 'mobile')).toContain('No clicks recorded');
 });
