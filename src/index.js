@@ -149,7 +149,8 @@ async function route(request, env) {
     if (!validDomain(site) || (await ownerOf(env, site)) !== login) return json(404, { error: 'site not found' });
     try {
       return json(200, { site, events: await siteLogs(env, site, { limit: url.searchParams.get('limit') || 50, kind: url.searchParams.get('kind') || '' }) });
-    } catch {
+    } catch (e) {
+      console.error('logs failed', e?.message);
       return json(502, { error: 'logs unavailable' });
     }
   }
