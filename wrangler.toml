@@ -10,7 +10,7 @@ routes = [{ pattern = "analytics.flisk.si", custom_domain = true }]
 binding = "EVENTS"
 dataset = "flisk_analytics"
 
-# The list of sites only (a few rows). Free plan: 100,000 rows written, 5 million read a day.
+# The list of sites, API keys and click-map rows (src/clicks.js). Free plan: 100,000 rows written, 5 million read a day.
 # Tables: `bunx wrangler@4 d1 execute analytics --remote --file schema.sql`
 [[d1_databases]]
 binding = "DB"
@@ -23,6 +23,8 @@ ALLOWED_LOGINS = "odykyi"
 # The Workers Free plan allows 100,000 requests a day for the whole account, shared with chat, fleet and inference.
 # Past this many counted pageviews a day (per data centre, approximate) the beacon returns 204 and writes nothing.
 DAILY_CAP = "30000"
+# Click-map rows (D1) a day for all sites together. Each click is one row plus one index entry.
+CLICKS_PER_DAY = "20000"
 
 # Secrets (GitHub OAuth app with callback https://analytics.flisk.si/auth/callback):
 #   bunx wrangler@4 secret put GITHUB_CLIENT_ID

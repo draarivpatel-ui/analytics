@@ -6,6 +6,7 @@ Cookieless web analytics for the Flisk sites. One Cloudflare Worker, Analytics E
 - `scripts/install-jekyll.sh` is the one-line Jekyll installer (`curl -fsSL https://flisk.sh/install/jekyll | sh -s -- example.com`). Host it at `flisk.sh/install/jekyll`.
 - `src/ingest.js` takes the beacon: drops bots, unknown sites and wrong origins, applies the daily cap, writes one Analytics Engine data point.
 - The visitor's browser language (first `Accept-Language` tag, primary subtag only such as `nl`) is stored per pageview and shown in the Visitor languages tab, so you can see which languages to add per site. No schema change: Analytics Engine blobs need no migration, and it counts from the first deploy on.
+- Click map (`src/clicks.js`): `a.js` also records every click with its place (x as a share of the page width, y in px), kind (`ctl` for links, buttons and fields, `dead` for anything else) and a short label (a field by its kind only). Batches of up to 20 go to `/e` on pagehide; nothing is sent under Do Not Track or Global Privacy Control. Rows go to the D1 table `clicks` (no visitor id), capped at `CLICKS_PER_DAY` for all sites together. `GET /api/clicks?site=&page=/&dev=mobile|desktop&days=7` (owner only) answers in grow.flisk.si's shape `{page,dev,since,clicks,dead,targets:[{target,kind,n}],cells:[{x,y,n}]}` for `gel click-map`. After pulling this, run `schema.sql` on the remote D1 before deploying.
 - `src/stats.js` reads the dashboard numbers through the Analytics Engine SQL API and caches every answer.
 - The cabinet (`src/ui.js`) is the approved Ledger design. Only the logins in `ALLOWED_LOGINS` can sign in.
 
@@ -33,7 +34,7 @@ Make a key at `/tokens`, then:
 claude mcp add --transport http flisk-analytics https://analytics.flisk.si/mcp --header "Authorization: Bearer fa_<key>"
 ```
 
-Tools: `list_sites`, `add_site`, `install_snippet`, `site_stats`. The same key works as `Authorization: Bearer` on `/api/sites` and `/api/stats`. Only a SHA-256 of a key is stored. A ready skill is in `skills/flisk-analytics/`.
+Tools: `list_sites`, `add_site`, `install_snippet`, `site_stats`. The same key works as `Authorization: Bearer` on `/api/sites`, `/api/stats` and `/api/clicks`. Only a SHA-256 of a key is stored. A ready skill is in `skills/flisk-analytics/`.
 
 ## License
 

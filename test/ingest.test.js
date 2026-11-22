@@ -97,7 +97,7 @@ test('a.js sends the theme: data-flisk-theme, else data-theme, never light or da
     let sent;
     const html = { getAttribute: (k) => attrs[k] ?? null };
     const script = { getAttribute: (k) => (k === 'data-domain' ? 'x.flisk.si' : null) };
-    const g = { document: { currentScript: script, documentElement: html, referrer: '', visibilityState: 'visible' }, navigator: { userAgent: 'Chrome', sendBeacon: (_u, b) => { sent = JSON.parse(b); return true; } }, location: { pathname: '/', search: '' }, history: {}, sessionStorage: { getItem: () => 'sid', setItem() {} }, addEventListener() {}, URLSearchParams, setTimeout, JSON, String, Math, RegExp };
+    const g = { document: { currentScript: script, documentElement: html, referrer: '', visibilityState: 'visible', addEventListener() {} }, navigator: { userAgent: 'Chrome', sendBeacon: (_u, b) => { sent = JSON.parse(b); return true; } }, location: { pathname: '/', search: '' }, history: {}, sessionStorage: { getItem: () => 'sid', setItem() {} }, addEventListener() {}, URLSearchParams, setTimeout, JSON, String, Math, RegExp };
     new Function(...Object.keys(g), src)(...Object.values(g));
     return sent.t;
   };

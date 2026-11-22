@@ -5,6 +5,7 @@ import { DEFAULT_PANELS, siteLogs, siteStats, sitesOverview, validDomain } from 
 import { dashboardPage, installPage, loginPage, messagePage, newSitePage, sitesPage, tokensPage } from './ui.js';
 import { addSite, cleanDomain, listDomains, ownerOf } from './sites.js';
 import { bearerLogin, createToken, listTokens, revokeToken } from './tokens.js';
+import { clickMap } from './clicks.js';
 import { mcpResponse } from './mcp.js';
 import { publicFile } from './public-files.js';
 import { notFoundPage } from './not-found.js';
@@ -132,6 +133,15 @@ async function route(request, env) {
       return out ? json(200, out) : json(400, { error: 'bad range' });
     } catch {
       return json(502, { error: 'stats unavailable' });
+    }
+  }
+  if (path === '/api/clicks' && method === 'GET') {
+    const site = url.searchParams.get('site') || '';
+    if (!validDomain(site) || (await ownerOf(env, site)) !== login) return json(404, { error: 'site not found' });
+    try {
+      return json(200, await clickMap(env, site, url.searchParams));
+    } catch {
+      return json(502, { error: 'clicks unavailable' });
     }
   }
   if (path === '/api/logs' && method === 'GET') {

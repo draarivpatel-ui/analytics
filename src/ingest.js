@@ -1,7 +1,10 @@
 // The pageview beacon: one request in, one Analytics Engine data point out. Nothing else is stored.
+// Click-map batches ({ e: 'clicks' }) go to D1 instead (src/clicks.js).
 // No cookie, no IP kept. A visitor is a hash of (secret, day, site, ip, user agent) that changes every day.
 
 export const BLOBS = ['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city', 'theme', 'kind', 'target', 'language'];
+
+import { recordClicks } from './clicks.js';
 
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|curl|wget|python|node-fetch|axios|go-http|java\/|monitor|uptime|pingdom|phantom|puppeteer|playwright/i;
 export const isBot = (ua) => !ua || BOT.test(ua);
@@ -92,6 +95,12 @@ export async function handleBeacon(request, env, now = Date.now()) {
   let originHost = '';
   try { originHost = new URL(request.headers.get('origin') || '').hostname.replace(/^www\./, ''); } catch { /* none */ }
   if (originHost && originHost !== site && !originHost.endsWith(`.${site}`)) return done();
+  // Click-map batches: D1 with its own daily cap, not Analytics Engine. Do Not Track and Global Privacy Control are honoured here too.
+  if (b.e === 'clicks') {
+    if (request.headers.get('dnt') === '1' || request.headers.get('sec-gpc') === '1') return done();
+    await recordClicks(env, site, b, now).catch(() => 0);
+    return done();
+  }
   if (!(await underCap(env, now))) return done();
   const click = b.e === 'click';
   const target = click ? cleanLink(b.l) : '';
