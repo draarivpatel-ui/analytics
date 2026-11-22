@@ -88,6 +88,8 @@ test('the dashboard and install pages render for an owned site, with the right s
   expect(dash.headers.get('content-security-policy')).toContain("connect-src 'self'");
   // The heatmap shows the site in an iframe; default-src 'none' would block it.
   expect(dash.headers.get('content-security-policy')).toMatch(/frame-src https:/);
+  expect(dash.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+  expect(dash.headers.get('x-frame-options')).toBe('SAMEORIGIN');
   const page = await dash.text();
   expect(page).toContain('"flisk.sh"');
   expect(page).toContain('href="https://flisk.sh"');

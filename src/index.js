@@ -15,11 +15,12 @@ export { cleanDomain };
 
 const SECURITY = {
   'x-content-type-options': 'nosniff',
-  'x-frame-options': 'DENY',
+  // SAMEORIGIN and frame-ancestors 'self': the click heatmap previews this site's own pages; no other site may frame it.
+  'x-frame-options': 'SAMEORIGIN',
   'referrer-policy': 'same-origin',
   'strict-transport-security': 'max-age=31536000; includeSubDomains',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()',
-  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline' https://flisk.si https://flisk.sh https://flisk.sh; img-src 'self' data: https:; frame-src https:; form-action 'self'; connect-src 'self' https://flisk.sh https://flisk.sh; frame-ancestors 'none'; base-uri 'none'",
+  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline' https://flisk.si https://flisk.sh https://flisk.sh; img-src 'self' data: https:; frame-src https:; form-action 'self'; connect-src 'self' https://flisk.sh https://flisk.sh; frame-ancestors 'self'; base-uri 'none'",
 };
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
 const html = (body, status = 200) => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...SECURITY } });
