@@ -134,7 +134,7 @@ export async function siteLogs(env, site, { limit = 50, kind = '' } = {}, { sql 
   const n = Math.min(Math.max(Math.floor(Number(limit)) || 50, 1), 200);
   const only = kind === 'click' ? "AND blob14 = 'click'" : kind === 'pageview' ? "AND blob14 = ''" : '';
   return cached(cache, `${site}/logs/${n}/${kind || 'all'}`, 20, async () => {
-    const rows = await sql(`SELECT timestamp AS t, blob14 AS kind, blob1 AS path, blob15 AS target, blob2 AS source, blob4 AS country, blob12 AS city, blob5 AS browser, blob6 AS os, blob7 AS device, blob8 AS visitor FROM ${DATASET} WHERE index1 = '${site}' ${only} AND timestamp > NOW() - INTERVAL '7' DAY ORDER BY timestamp DESC LIMIT ${n}`);
+    const rows = await sql(`SELECT timestamp AS t, blob14 AS kind, blob1 AS path, blob15 AS target, blob2 AS source, blob4 AS country, blob12 AS city, blob5 AS browser, blob6 AS os, blob7 AS device, blob8 AS visitor FROM ${DATASET} WHERE index1 = '${site}' ${only} AND timestamp > NOW() - INTERVAL '7' DAY ORDER BY t DESC LIMIT ${n}`);
     return rows.map((r) => ({ t: `${String(r.t).slice(0, 19).replace(' ', 'T')}Z`, kind: r.kind === 'click' ? 'click' : 'pageview', path: String(r.path || ''), target: String(r.target || ''), source: String(r.source || ''), country: String(r.country || ''), city: String(r.city || ''), browser: String(r.browser || ''), os: String(r.os || ''), device: String(r.device || ''), visitor: String(r.visitor || '').slice(0, 6) }));
   });
 }
