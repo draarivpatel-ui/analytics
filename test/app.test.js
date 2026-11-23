@@ -196,3 +196,14 @@ test('the logs route is owner-only and degrades to 502 without a Cloudflare toke
   expect((await as(env, 'odykyi', '/api/logs?site=theirs.example')).status).toBe(404);
   expect((await as(env, 'odykyi', '/api/logs?site=flisk.sh')).status).toBe(502);
 });
+
+test('signed-in pages expose only the login in data-flisk-login for the org bar, escaped; signed-out pages do not', async () => {
+  const env = fakeEnv();
+  for (const p of ['/', '/new', '/tokens']) {
+    const res = await as(env, 'odykyi', p);
+    expect(res.headers.get('cache-control')).toContain('no-store');
+    expect(await res.text()).toMatch(/<span class="m" data-flisk-login>odykyi<\/span>/);
+  }
+  const out = await handle(new Request('https://analytics.flisk.si/'), env);
+  expect(await out.text()).not.toContain('data-flisk-login');
+});

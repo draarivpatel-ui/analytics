@@ -30,7 +30,7 @@ const LOGO = '<a class="logo" href="/"><span class="mk">&gt;_</span><span>flisk<
 
 function shell(login, active, inner) {
   const nav = [['Sites', '/'], ['API keys', '/tokens']].map(([n, h]) => `<a href="${h}" class="${n === active ? 'on' : ''}">${n}</a>`).join('');
-  return `<div class="frame"><header class="top">${LOGO}<nav>${nav}</nav><form class="me" method="post" action="/logout" style="margin:0"><span class="m">${esc(login)}</span><button class="av" title="Sign out" style="border:0;cursor:pointer">${esc(login[0].toUpperCase())}</button></form></header><main id="main">${inner}</main></div>`;
+  return `<div class="frame"><header class="top">${LOGO}<nav>${nav}</nav><form class="me" method="post" action="/logout" style="margin:0"><span class="m" data-flisk-login>${esc(login)}</span><button class="av" title="Sign out" style="border:0;cursor:pointer">${esc(login[0].toUpperCase())}</button></form></header><main id="main">${inner}</main></div>`;
 }
 
 export function loginPage(error = '') {
