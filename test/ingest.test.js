@@ -78,6 +78,20 @@ test('user agents', () => {
   expect(isBot(UA)).toBe(false);
 });
 
+test('pageviews from Edge on Android and iOS are counted as Edge', async () => {
+  const env = fakeEnv();
+  for (const ua of [
+    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/130.0.0.0 Mobile/15E148 Safari/605.1.15',
+  ]) {
+    await handleBeacon(beacon({ d: 'flisk.sh', p: '/' }, { 'user-agent': ua }), env);
+  }
+  expect(env.points.map((p) => p.blobs.slice(4, 7))).toEqual([
+    ['Edge', 'Android', 'Mobile'],
+    ['Edge', 'iOS', 'Mobile'],
+  ]);
+});
+
 test('the theme is validated: junk, upper case and long ids are cleaned, and an old tracker without t stores an empty theme', async () => {
   const { cleanTheme } = await import('../src/ingest.js');
   expect(cleanTheme(' Cool-Glow ')).toBe('cool-glow');
