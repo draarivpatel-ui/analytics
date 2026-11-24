@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from 'bun:test';
-import { classifySource, cleanLink, handleBeacon, isBot, parseUa, resetSitesCache, underCap, visitorHash } from '../src/ingest.js';
+import { classifySource, classifyVisit, cleanCampaign, cleanLink, handleBeacon, isBot, parseUa, resetSitesCache, underCap, visitorHash } from '../src/ingest.js';
 import { beacon, fakeCache, fakeEnv, UA } from './helpers.js';
 
 beforeEach(() => resetSitesCache());
@@ -137,4 +137,63 @@ test('the visitor language is the primary subtag of the first Accept-Language ta
   await handleBeacon(beacon({ d: 'flisk.sh', p: '/' }), env);
   expect(env.points.map((p) => p.blobs[15])).toEqual(['nl', '']);
   expect(JSON.stringify(env.points[0])).not.toContain('NL');
+});
+
+test('campaign values lose query junk: flisk-bar?dfsfds becomes flisk-bar', () => {
+  expect(cleanCampaign('flisk-bar?dfsfds')).toBe('flisk-bar');
+  expect(cleanCampaign(' Free-Key#top ')).toBe('free-key');
+  expect(cleanCampaign('Spring Sale!<b>')).toBe('spring-saleb');
+  expect(cleanCampaign('a'.repeat(100))).toHaveLength(60);
+  expect(cleanCampaign(undefined)).toBe('');
+});
+
+test('utm_source names the Source and utm_medium the Channel; known sources get their proper name', () => {
+  const v = (us, um, r = '') => classifyVisit({ us, um, r }, 'flisk.sh');
+  expect(v('x', 'social')).toMatchObject({ source: 'X (Twitter)', channel: 'Social' });
+  expect(v('Twitter', 'social')).toMatchObject({ source: 'X (Twitter)' });
+  expect(v('hn', 'social').source).toBe('Hacker News');
+  expect(v('hackernews', '').source).toBe('Hacker News');
+  expect(v('reddit', 'social').source).toBe('Reddit');
+  expect(v('linkedin', 'social').source).toBe('LinkedIn');
+  expect(v('dev.to', 'social').source).toBe('dev.to');
+  expect(v('toolradar', 'referral')).toMatchObject({ source: 'Toolradar', channel: 'Referral' });
+  expect(v('producthunt', 'social').source).toBe('Product Hunt');
+  expect(v('analytics', 'cta')).toMatchObject({ source: 'analytics', channel: 'CTA' });
+  expect(v('weekly-digest', 'email').channel).toBe('Email');
+  for (const m of ['cpc', 'ppc', 'paid', 'paid-social']) expect(v('google', m)).toMatchObject({ source: 'Google', channel: 'Paid' });
+  expect(v('my-list', 'zine').channel).toBe('Zine');
+  // No medium: a known social site is Social, anything else is Referral, and a real referrer's channel wins over Referral.
+  expect(v('x', '').channel).toBe('Social');
+  expect(v('partner', '').channel).toBe('Referral');
+  expect(v('partner', '', 'https://www.google.com/').channel).toBe('Organic Search');
+  // No utm_source: the referrer decides, even when a medium is sent.
+  expect(v('', 'social', 'https://t.co/abc')).toMatchObject({ source: 'X (Twitter)', channel: 'Social' });
+  expect(v('', '', '')).toMatchObject({ source: 'Direct / None', channel: 'Direct' });
+});
+
+test('a pageview with utm_source shows it as the Source and keeps the blob layout (new blobs are appended)', async () => {
+  const { BLOBS } = await import('../src/ingest.js');
+  expect(BLOBS.slice(0, 16)).toEqual(['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city', 'theme', 'kind', 'target', 'language']);
+  expect(BLOBS.slice(16)).toEqual(['utm_source', 'utm_medium']);
+  const env = fakeEnv();
+  // A social app strips the referrer: only the utm values say where the visit came from.
+  await handleBeacon(beacon({ d: 'flisk.sh', p: '/', r: '', u: 'launch?x=1', us: 'X', um: 'Social' }), env);
+  await handleBeacon(beacon({ d: 'flisk.sh', p: '/', r: 'https://t.co/a' }), env);
+  const [a, b] = env.points.map((p) => p.blobs);
+  expect(a).toHaveLength(BLOBS.length);
+  expect(a.slice(1, 3)).toEqual(['X (Twitter)', 'Social']);
+  expect(a[9]).toBe('launch');
+  expect(a.slice(16)).toEqual(['x', 'social']);
+  expect(b.slice(1, 3)).toEqual(['X (Twitter)', 'Social']); // the referrer path is unchanged
+  expect(b.slice(16)).toEqual(['', '']);
+});
+
+test('a.js sends utm_campaign, utm_source and utm_medium as u, us and um', async () => {
+  const src = await Bun.file(new URL('../public/a.js', import.meta.url)).text();
+  let sent;
+  const html = { getAttribute: () => null };
+  const script = { getAttribute: (k) => (k === 'data-domain' ? 'x.flisk.si' : null) };
+  const g = { document: { currentScript: script, documentElement: html, referrer: '', visibilityState: 'visible', addEventListener() {} }, navigator: { userAgent: 'Chrome', sendBeacon: (_u, b) => { sent = JSON.parse(b); return true; } }, location: { pathname: '/', search: '?utm_source=x&utm_medium=social&utm_campaign=launch&other=1', hash: '' }, history: {}, sessionStorage: { getItem: () => 'sid', setItem() {} }, addEventListener() {}, URLSearchParams, setTimeout, JSON, String, Math, RegExp };
+  new Function(...Object.keys(g), src)(...Object.values(g));
+  expect([sent.u, sent.us, sent.um]).toEqual(['launch', 'x', 'social']);
 });

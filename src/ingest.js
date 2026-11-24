@@ -2,7 +2,8 @@
 // Click-map batches ({ e: 'clicks' }) go to D1 instead (src/clicks.js).
 // No cookie, no IP kept. A visitor is a hash of (secret, day, site, ip, user agent) that changes every day.
 
-export const BLOBS = ['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city', 'theme', 'kind', 'target', 'language'];
+export const BLOBS = ['path', 'source', 'channel', 'country', 'browser', 'os', 'device', 'visitor', 'sid', 'campaign', 'region', 'city', 'theme', 'kind', 'target', 'language', 'utm_source', 'utm_medium'];
+// New blobs only ever go at the END: old data points keep their column numbers (see PANELS in src/stats.js).
 
 import { recordClicks } from './clicks.js';
 
@@ -28,6 +29,39 @@ export function classifySource(referrer, siteHost) {
   if (host === 'github.com') return { source: 'GitHub', channel: 'Referral' };
   if (SEARCH.some((re) => re.test(host))) return { source: host.startsWith('google') || /^www\.google\./.test(host) ? 'Google' : host, channel: 'Organic Search' };
   return { source: host, channel: 'Referral' };
+}
+
+// A utm value (campaign, source, medium): lowercase, stops at the first ? or #, spaces become dashes, only [a-z0-9._-] stay, 60 characters.
+export function cleanUtm(v) {
+  const s = String(v ?? '').trim().split(/[?#]/)[0].toLowerCase().replace(/[\s+]+/g, '-').replace(/[^a-z0-9._-]/g, '');
+  return s.slice(0, 60);
+}
+export const cleanCampaign = cleanUtm;
+
+// utm_source values we know by name. The rest show as the cleaned value.
+const UTM_SOURCES = {
+  x: 'X (Twitter)', 'x.com': 'X (Twitter)', twitter: 'X (Twitter)', 'twitter.com': 'X (Twitter)', 't.co': 'X (Twitter)',
+  reddit: 'Reddit', hn: 'Hacker News', hackernews: 'Hacker News', 'hacker-news': 'Hacker News', 'news.ycombinator.com': 'Hacker News',
+  linkedin: 'LinkedIn', 'dev.to': 'dev.to', devto: 'dev.to', toolradar: 'Toolradar', producthunt: 'Product Hunt', 'product-hunt': 'Product Hunt',
+  github: 'GitHub', facebook: 'Facebook', fb: 'Facebook', youtube: 'YouTube', bluesky: 'Bluesky', bsky: 'Bluesky', discord: 'Discord',
+  telegram: 'Telegram', mastodon: 'Mastodon', google: 'Google', bing: 'Bing', duckduckgo: 'DuckDuckGo', newsletter: 'Newsletter',
+};
+const SOCIAL_NAMES = new Set(['X (Twitter)', 'Reddit', 'Hacker News', 'LinkedIn', 'Facebook', 'YouTube', 'Bluesky', 'Discord', 'Telegram', 'Mastodon', 'Product Hunt', 'dev.to']);
+// utm_medium values: the Channel shown. Unknown ones are shown capitalised as sent.
+const UTM_MEDIA = {
+  social: 'Social', 'social-media': 'Social', cta: 'CTA', email: 'Email', 'e-mail': 'Email', newsletter: 'Email',
+  cpc: 'Paid', ppc: 'Paid', paid: 'Paid', paidsocial: 'Paid', 'paid-social': 'Paid', display: 'Paid', banner: 'Paid',
+  referral: 'Referral', organic: 'Organic Search', affiliate: 'Referral',
+};
+
+// utm_source (if any) names the Source and utm_medium the Channel; with no utm_source the referrer decides (classifySource).
+export function classifyVisit(b, siteHost) {
+  const us = cleanUtm(b?.us), um = cleanUtm(b?.um);
+  const ref = classifySource(b?.r, siteHost);
+  if (!us) return { ...ref, us: '', um };
+  const source = UTM_SOURCES[us] || us;
+  const channel = UTM_MEDIA[um] || (um ? um[0].toUpperCase() + um.slice(1) : SOCIAL_NAMES.has(source) ? 'Social' : ref.channel === 'Direct' ? 'Referral' : ref.channel);
+  return { source, channel, us, um };
 }
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -105,11 +139,11 @@ export async function handleBeacon(request, env, now = Date.now()) {
   const click = b.e === 'click';
   const target = click ? cleanLink(b.l) : '';
   if (click && !target) return done();
-  const { source, channel } = classifySource(b.r, site);
+  const { source, channel, us, um } = classifyVisit(b, site);
   const { browser, os, device } = parseUa(ua);
   const cf = request.cf || {};
   const ip = request.headers.get('cf-connecting-ip') || '';
-  const blobs = [cleanPath(b.p), clip(source), channel, countryName(cf.country), browser, os, device, await visitorHash(env, site, ip, ua, new Date(now)), clip(b.s, 24), clip(b.u, 60), clip(cf.region, 60), clip(cf.city, 60), cleanTheme(b.t), click ? 'click' : '', target, click ? '' : primaryLanguage(request.headers.get('accept-language'))];
+  const blobs = [cleanPath(b.p), clip(source), channel, countryName(cf.country), browser, os, device, await visitorHash(env, site, ip, ua, new Date(now)), clip(b.s, 24), cleanCampaign(b.u), clip(cf.region, 60), clip(cf.city, 60), cleanTheme(b.t), click ? 'click' : '', target, click ? '' : primaryLanguage(request.headers.get('accept-language')), us, um];
   env.EVENTS.writeDataPoint({ indexes: [site], blobs, doubles: [1] });
   return done();
 }
