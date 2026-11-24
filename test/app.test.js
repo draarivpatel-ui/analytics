@@ -16,7 +16,16 @@ test('signed out visitors see the GitHub login, and the API says 401', async () 
   const env = fakeEnv();
   const page = await handle(new Request('https://analytics.flisk.si/'), env);
   expect(page.status).toBe(200);
-  expect(await page.text()).toContain('Continue with GitHub');
+  const body = await page.text();
+  expect(body).toContain('Get a free API key');
+  expect(body).toContain('No card. Sign in with GitHub.');
+  // The standard CTA link carries its own utm values, so the sign-up source shows up in Analytics.
+  expect(body).toContain('href="/auth/login?utm_source=analytics&amp;utm_medium=cta&amp;utm_campaign=free-key"');
+  // First-screen limits: h1 at most 12 words, lead at most 32, no jargon in either.
+  const h1 = /<h1>(.*?)<\/h1>/.exec(body)[1], lead = /<\/h1><p>(.*?)<\/p>/.exec(body)[1];
+  expect(h1.split(/\s+/).length).toBeLessThanOrEqual(12);
+  expect(lead.split(/\s+/).length).toBeLessThanOrEqual(32);
+  expect(`${h1} ${lead}`).not.toMatch(/endpoint|mcp|inference/i);
   expect((await handle(new Request('https://analytics.flisk.si/api/sites'), env)).status).toBe(401);
 });
 

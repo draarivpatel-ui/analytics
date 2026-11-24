@@ -24,6 +24,10 @@ Never print or store the key anywhere else. If the tools below are missing, ask 
 - `install_snippet {site}`: the script tag plus the Jekyll, Next.js and Worker variants.
 - `site_stats {site, range, panels}`: `range` is `today`, `7d`, `30d` or `12m`; `panels` picks the top lists (`channels`, `sources`, `campaigns`, `themes`, `pages`, `countries`, `regions`, `cities`, `browsers`, `os`, `devices`).
 
+## Tag links so social visits are not "Direct"
+
+Social apps strip the referrer. Tag every link you post with `?utm_source=<where>&utm_medium=<kind>&utm_campaign=<name>` (for example `?utm_source=x&utm_medium=social&utm_campaign=launch`). `utm_source` shows in the `sources` panel (`x`, `hn`, `reddit`, `linkedin`, `dev.to`, `toolradar`, `producthunt` get their proper names), `utm_medium` in `channels` (`social`, `cta`, `email`, `cpc`/`paid`, `referral`) and `utm_campaign` in `campaigns`. Use lowercase, no spaces.
+
 ## Install a site
 
 1. `add_site` with the domain.
